@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html><head><title>Diagnostics</title></head><body>
+<h1>🔍 Render Diagnostics</h1>
+<h2>Available files:</h2>
+<ul>
+<li><a href="index.html">index.html (main)</a></li>
+<li><a href="admin.html">admin.html (alternative)</a></li>
+<li><a href="login.html">login.html (redirect)</a></li>
+<li><a href="universal.html">universal.html (simple)</a></li>
+<li><a href="static/test.txt">static/test.txt</a></li>
+</ul>
+<h2>Runtime info:</h2>
+<div id="info">Loading...</div>
+<script>
+document.getElementById('info').innerHTML = '
+URL: ' + window.location.href + '<br/>'
++ 'User Agent: ' + navigator.userAgent + '<br/>'
++ 'Timestamp: ' + new Date().toISOString()
+;</script>
+</body></html>
