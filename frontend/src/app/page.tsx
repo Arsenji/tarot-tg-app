@@ -8,6 +8,7 @@ import { ThreeCardsScreen } from '@/screens/ThreeCardsScreen';
 import { YesNoScreen } from '@/screens/YesNoScreen';
 import { HistoryScreen } from '@/screens/HistoryScreen';
 import { initPerformanceMonitoring } from '@/utils/performance';
+import { getApiEndpoint } from '@/utils/config';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<'home' | 'history'>('home');
@@ -90,7 +91,7 @@ export default function Home() {
 
       const token = await getAuthToken();
       
-      const response = await fetch('http://localhost:3001/api/tarot/subscription-status', {
+      const response = await fetch(getApiEndpoint('/tarot/subscription-status'), {
         method: 'GET',
         headers: {
           'Authorization': token ? `Bearer ${token}` : '',

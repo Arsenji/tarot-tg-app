@@ -2,6 +2,8 @@
  * Утилиты для работы с аутентификацией через Telegram WebApp
  */
 
+import { getApiEndpoint } from './config';
+
 export interface AuthTokenData {
   token: string;
   userId: string;
@@ -21,7 +23,7 @@ export const getAuthToken = async (): Promise<string | null> => {
       // Если токена нет, получаем его через Telegram WebApp
       const initData = (window as any).Telegram.WebApp.initData;
       
-      const authResponse = await fetch('/api/auth/telegram', {
+      const authResponse = await fetch(getApiEndpoint('/auth/telegram'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

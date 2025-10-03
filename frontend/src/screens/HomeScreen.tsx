@@ -10,6 +10,7 @@ import { SparklesIcon, Calendar, HelpCircle, Crown, Lock } from 'lucide-react';
 import { SubscriptionStatus } from '@/components/SubscriptionStatus';
 import { SubscriptionModal } from '@/components/SubscriptionModal';
 import { apiService } from '@/services/api';
+import { getApiEndpoint } from '@/utils/config';
 
 const sparklesData = [
   { left: 10, top: 20, delay: 0, duration: 2.5 },
@@ -103,7 +104,7 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
 
       const token = await getAuthToken();
       
-      const response = await fetch('http://localhost:3001/api/tarot/subscription-status', {
+      const response = await fetch(getApiEndpoint('/tarot/subscription-status'), {
         method: 'GET',
         headers: {
           'Authorization': token ? `Bearer ${token}` : '',
