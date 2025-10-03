@@ -1,43 +1,58 @@
 {
-  "name": "admin-backend",
+  "name": "tarot-tg-app",
   "version": "1.0.0",
-  "description": "Admin backend for Tarot Telegram App",
-  "main": "dist/index.js",
+  "description": "Telegram Tarot Application - Frontend, Backend, Admin Panel",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend", 
+    "admin-backend"
+  ],
   "scripts": {
-    "build": "tsc",
-    "start": "node dist/index.js",
-    "dev": "nodemon src/index.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:backend": "cd backend && npm run dev", 
+    "dev:admin-backend": "cd admin-backend && npm run dev",
+    "dev:all": "concurrently \"npm run dev:frontend\" \"npm run dev:backend\" \"npm run dev:admin-backend\"",
+    "build": "npm run build:frontend && npm run build:backend && npm run build:admin-backend",
+    "build:frontend": "cd frontend && npm run build",
+    "build:backend": "cd backend && npm run build",
+    "build:admin-backend": "cd admin-backend && npm run build", 
+    "install:all": "npm install && cd frontend && npm install && cd ../backend && npm install && cd ../admin-backend && npm install",
+    "clean": "npm run clean:frontend && npm run clean:backend && npm run clean:admin-backend",
+    "clean:frontend": "cd frontend && rm -rf .next out node_modules",
+    "clean:backend": "cd backend && rm -rf dist node_modules",
+    "clean:admin-backend": "cd admin-backend && rm -rf dist node_modules",
+    "lint": "npm run lint:frontend && npm run lint:backend && npm run lint:admin-backend",
+    "lint:frontend": "cd frontend && npm run lint",
+    "lint:backend": "cd backend && echo \"No linting configured for backend\"",
+    "lint:admin-backend": "cd admin-backend && echo \"No linting configured for admin-backend\""
   },
   "keywords": [
-    "admin",
-    "telegram",
-    "tarot"
+    "tarot",
+    "telegram", 
+    "bot",
+    "telegram-webapp",
+    "typescript",
+    "react",
+    "nextjs",
+    "express",
+    "mongodb",
+    "openai",
+    "admin-panel"
   ],
-  "author": "",
-  "license": "ISC",
-  "dependencies": {
-    "@types/axios": "^0.9.36",
-    "@types/bcryptjs": "^2.4.6",
-    "@types/cors": "^2.8.17",
-    "@types/express": "^4.17.21",
-    "@types/jsonwebtoken": "^9.0.5",
-    "@types/morgan": "^1.9.9",
-    "@types/node": "^20.10.5",
-    "@types/pg": "^8.10.9",
-    "axios": "^1.12.2",
-    "bcryptjs": "^2.4.3",
-    "cors": "^2.8.5",
-    "dotenv": "^16.3.1",
-    "express": "^4.18.2",
-    "helmet": "^7.1.0",
-    "jsonwebtoken": "^9.0.2",
-    "morgan": "^1.10.0",
-    "pg": "^8.11.3",
+  "author": "Tarot Telegram App Team",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "nodemon": "^3.0.2",
     "typescript": "^5.3.3"
   },
-  "devDependencies": {
-    "nodemon": "^3.0.2",
-    "ts-node": "^10.9.2"
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/tarot-tg-app.git"
   }
 }

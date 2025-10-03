@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Тест аутентификации</title>
+</head>
+<body>
+    <h1>🧪 Тест аутентификации Telegram WebApp</h1>
+    <div id="status">Инициализация...</div>
+    <script>
+        // Мок Telegram WebApp для тестирования
+        window.Telegram = {
+            WebApp: {
+                initData: 'user=%7B%22id%22%3A399476674%2C%22first_name%22%3A%22Arsenij%22%2C%22last_name%22%3A%22Berdnikov%22%2C%22username%22%3A%22arsenji%22%7D&chat_instance=&chat_type=&auth_date=$(date +%s)&hash=test_hash_signature'
+            }
+        };
+        
+        console.log('🔍 Telegram WebApp мок создан:', window.Telegram.WebApp.initData);
+        
+        // Тест функции получения токена
+        async function testAuth() {
+            try {
+                const initData = window.Telegram.WebApp.initData;
+                document.getElementById('status').innerHTML = '🔐 Тестируем аутентификацию...';
+                
+                const response = await fetch('/api/auth/telegram', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ initData })
+                });
+                
+                const data = await response.json();
+                console.log('📋 Ответ сервера:', data);
+                
+                if (data.success) {
+                    document.getElementById('status').innerHTML = '✅ Авторизация успешна! Токен получен.';
+                    localStorage.setItem('authToken', data.data.token);
+                    console.log('💾 Токен сохранен:', data.data.token.substring(0, 50) + '...');
+                } else {
+                    document.getElementById('status').innerHTML = '❌ Ошибка авторизации: ' + data.error;
+                }
+            } catch (error) {
+                console.error('🚨 Ошибка:', error);
+                document.getElementById('status').innerHTML = '⚠️ Backend недоступен: ' + error.message;
+            }
+        }
+        
+        // Автоматический запуск теста через 1 секунду
+        setTimeout(testAuth, 1000);
+    </script>
+</body>
+</html>

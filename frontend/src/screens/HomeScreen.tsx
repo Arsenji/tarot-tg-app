@@ -74,10 +74,39 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
     setIsLoading(true);
     try {
       // Используем endpoint для получения статуса подписки
+      const getAuthToken = async () => {
+        try {
+          let token = localStorage.getItem('authToken');
+          
+          if (!token && typeof window !== 'undefined' && (window as any).Telegram?.WebApp?.initData) {
+            const initData = (window as any).Telegram.WebApp.initData;
+            
+            const authResponse = await fetch('/api/auth/telegram', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ initData })
+            });
+            
+            if (authResponse.ok) {
+              const authData = await authResponse.json();
+              token = authData.token;
+              localStorage.setItem('authToken', token);
+            }
+          }
+          
+          return token;
+        } catch (error) {
+          console.error('Error getting auth token:', error);
+          return null;
+        }
+      };
+
+      const token = await getAuthToken();
+      
       const response = await fetch('http://localhost:3001/api/tarot/subscription-status', {
         method: 'GET',
         headers: {
-          'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2OGNkYjFiNTViNzRiOWJiMTFlODUyNjMiLCJ0ZWxlZ3JhbUlkIjozOTk0NzY2NzQsImlhdCI6MTc1OTQ0MjEzMywiZXhwIjoxNzYyMDM0MTMzfQ.sKu0ABuP4mZvDmaDj5kTYohRKFk5bmfhdRYoh395vRg',
+          'Authorization': token ? `Bearer ${token}` : '',
         },
       });
       
