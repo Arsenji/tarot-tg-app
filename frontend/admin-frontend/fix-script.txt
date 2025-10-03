@@ -1,0 +1,22 @@
+<script>
+// Router и API исправления
+console.log('🔧 Admin Panel Fixes Loaded');
+
+// Исправляем API URLs
+const originalFetch = window.fetch;
+window.fetch = function(url, options) {
+  if (typeof url === 'string' && url.includes('/api/api/')) {
+    url = url.replace('/api/api/', '/api/');
+    console.log('🔧 Fixed API URL:', url);
+  }
+  return originalFetch(url, options);
+};
+
+// Исправляем React Router для статических сайтов
+window.addEventListener('popstate', function(event) {
+  console.log('🔧 Preventing page reload on route change');
+  event.preventDefault();
+});
+
+console.log('✅ All fixes applied');
+</script>

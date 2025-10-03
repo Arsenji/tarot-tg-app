@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест Таро API</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+        }
+        .card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 20px;
+            margin: 20px 0;
+            backdrop-filter: blur(10px);
+        }
+        button {
+            background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+        .result {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .card-image {
+            width: 200px;
+            height: 300px;
+            object-fit: cover;
+            border-radius: 10px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎴 Тест Таро API</h1>
+    
+    <div class="card">
+        <h2>Аутентификация</h2>
+        <button onclick="authenticate()">Войти как тестовый пользователь</button>
+        <div id="auth-result" class="result"></div>
+    </div>
+
+    <div class="card">
+        <h2>Гадание на картах</h2>
+        <button onclick="getSingleCard()">Вытянуть одну карту</button>
+        <button onclick="getThreeCards()">Вытянуть три карты</button>
+        <button onclick="getYesNoCard()">Да/Нет гадание</button>
+        <div id="card-result" class="result"></div>
+    </div>
+
+    <script>
+        let token = null;
+
+        async function authenticate() {
+            const resultDiv = document.getElementById('auth-result');
+            resultDiv.innerHTML = 'Аутентификация...';
+            
+            try {
+                const testUserData = {
+                    id: 123456789,
+                    first_name: 'Test',
+                    last_name: 'User',
+                    username: 'testuser',
+                    language_code: 'ru'
+                };
+                
+                const testInitData = `user=${encodeURIComponent(JSON.stringify(testUserData))}&auth_date=${Math.floor(Date.now() / 1000)}&hash=test_hash`;
+                
+                const response = await fetch('http://localhost:3001/api/auth/telegram', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ initData: testInitData })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    token = data.token;
+                    resultDiv.innerHTML = `
+                        <h3>✅ Аутентификация успешна!</h3>
+                        <p><strong>Пользователь:</strong> ${data.user.firstName} ${data.user.lastName}</p>
+                        <p><strong>Telegram ID:</strong> ${data.user.telegramId}</p>
+                        <p><strong>Премиум:</strong> ${data.user.isPremium ? 'Да' : 'Нет'}</p>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `<h3>❌ Ошибка аутентификации:</h3><p>${data.error}</p>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<h3>❌ Ошибка сети:</h3><p>${error.message}</p>`;
+            }
+        }
+
+        // Функция для получения пути к изображению карты из папки rider-waite
+        function getRiderWaiteImagePath(cardName) {
+            const cardImageMap = {
+                // Старшие арканы
+                'Шут': 'major_arcana_fool.png',
+                'Маг': 'major_arcana_magician.png',
+                'Верховная Жрица': 'major_arcana_priestess.png',
+                'Императрица': 'major_arcana_empress.png',
+                'Император': 'major_arcana_emperor.png',
+                'Иерофант': 'major_arcana_hierophant.png',
+                'Влюбленные': 'major_arcana_lovers.png',
+                'Колесница': 'major_arcana_chariot.png',
+                'Сила': 'major_arcana_strength.png',
+                'Отшельник': 'major_arcana_hermit.png',
+                'Колесо Фортуны': 'major_arcana_fortune.png',
+                'Справедливость': 'major_arcana_justice.png',
+                'Повешенный': 'major_arcana_hanged.png',
+                'Смерть': 'major_arcana_death.png',
+                'Умеренность': 'major_arcana_temperance.png',
+                'Дьявол': 'major_arcana_devil.png',
+                'Башня': 'major_arcana_tower.png',
+                'Звезда': 'major_arcana_star.png',
+                'Луна': 'major_arcana_moon.png',
+                'Солнце': 'major_arcana_sun.png',
+                'Суд': 'major_arcana_judgement.png',
+                'Мир': 'major_arcana_world.png',
+                
+                // Младшие арканы - Жезлы
+                'Туз Жезлы': 'minor_arcana_wands_ace.png',
+                'Двойка Жезлы': 'minor_arcana_wands_2.png',
+                'Тройка Жезлы': 'minor_arcana_wands_3.png',
+                'Четверка Жезлы': 'minor_arcana_wands_4.png',
+                'Пятерка Жезлы': 'minor_arcana_wands_5.png',
+                'Шестерка Жезлы': 'minor_arcana_wands_6.png',
+                'Семерка Жезлы': 'minor_arcana_wands_7.png',
+                'Восьмерка Жезлы': 'minor_arcana_wands_8.png',
+                'Девятка Жезлы': 'minor_arcana_wands_9.png',
+                'Десятка Жезлы': 'minor_arcana_wands_10.png',
+                'Паж Жезлы': 'minor_arcana_wands_page.png',
+                'Рыцарь Жезлы': 'minor_arcana_wands_knight.png',
+                'Королева Жезлы': 'minor_arcana_wands_queen.png',
+                'Король Жезлы': 'minor_arcana_wands_king.png',
+                
+                // Младшие арканы - Кубки
+                'Туз Кубки': 'minor_arcana_cups_ace.png',
+                'Двойка Кубки': 'minor_arcana_cups_2.png',
+                'Тройка Кубки': 'minor_arcana_cups_3.png',
+                'Четверка Кубки': 'minor_arcana_cups_4.png',
+                'Пятерка Кубки': 'minor_arcana_cups_5.png',
+                'Шестерка Кубки': 'minor_arcana_cups_6.png',
+                'Семерка Кубки': 'minor_arcana_cups_7.png',
+                'Восьмерка Кубки': 'minor_arcana_cups_8.png',
+                'Девятка Кубки': 'minor_arcana_cups_9.png',
+                'Десятка Кубки': 'minor_arcana_cups_10.png',
+                'Паж Кубки': 'minor_arcana_cups_page.png',
+                'Рыцарь Кубки': 'minor_arcana_cups_knight.png',
+                'Королева Кубки': 'minor_arcana_cups_queen.png',
+                'Король Кубки': 'minor_arcana_cups_king.png',
+                
+                // Младшие арканы - Мечи
+                'Туз Мечи': 'minor_arcana_swords_ace.png',
+                'Двойка Мечи': 'minor_arcana_swords_2.png',
+                'Тройка Мечи': 'minor_arcana_swords_3.png',
+                'Четверка Мечи': 'minor_arcana_swords_4.png',
+                'Пятерка Мечи': 'minor_arcana_swords_5.png',
+                'Шестерка Мечи': 'minor_arcana_swords_6.png',
+                'Семерка Мечи': 'minor_arcana_swords_7.png',
+                'Восьмерка Мечи': 'minor_arcana_swords_8.png',
+                'Девятка Мечи': 'minor_arcana_swords_9.png',
+                'Десятка Мечи': 'minor_arcana_swords_10.png',
+                'Паж Мечи': 'minor_arcana_swords_page.png',
+                'Рыцарь Мечи': 'minor_arcana_swords_knight.png',
+                'Королева Мечи': 'minor_arcana_swords_queen.png',
+                'Король Мечи': 'minor_arcana_swords_king.png',
+                
+                // Младшие арканы - Пентакли
+                'Туз Пентакли': 'minor_arcana_pentacles_ace.png',
+                'Двойка Пентакли': 'minor_arcana_pentacles_2.png',
+                'Тройка Пентакли': 'minor_arcana_pentacles_3.png',
+                'Четверка Пентакли': 'minor_arcana_pentacles_4.png',
+                'Пятерка Пентакли': 'minor_arcana_pentacles_5.png',
+                'Шестерка Пентакли': 'minor_arcana_pentacles_6.png',
+                'Семерка Пентакли': 'minor_arcana_pentacles_7.png',
+                'Восьмерка Пентакли': 'minor_arcana_pentacles_8.png',
+                'Девятка Пентакли': 'minor_arcana_pentacles_9.png',
+                'Десятка Пентакли': 'minor_arcana_pentacles_10.png',
+                'Паж Пентакли': 'minor_arcana_pentacles_page.png',
+                'Рыцарь Пентакли': 'minor_arcana_pentacles_knight.png',
+                'Королева Пентакли': 'minor_arcana_pentacles_queen.png',
+                'Король Пентакли': 'minor_arcana_pentacles_king.png',
+            };
+
+            const fileName = cardImageMap[cardName];
+            if (fileName) {
+                return `http://localhost:3000/images/rider-waite-tarot/${fileName}`;
+            }
+            
+            // Если карта не найдена, возвращаем заглушку
+            console.warn(`Изображение для карты "${cardName}" не найдено`);
+            return 'http://localhost:3000/images/rider-waite-tarot/major_arcana_fool.png';
+        }
+
+        async function getSingleCard() {
+            if (!token) {
+                alert('Сначала выполните аутентификацию!');
+                return;
+            }
+            
+            const resultDiv = document.getElementById('card-result');
+            resultDiv.innerHTML = 'Вытягиваем карту...';
+            
+            try {
+                const response = await fetch('http://localhost:3001/api/tarot/single-card', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({})
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    const card = data.card;
+                    const riderWaiteImagePath = getRiderWaiteImagePath(card.name);
+                    
+                    resultDiv.innerHTML = `
+                        <h3>🎴 ${card.name}</h3>
+                        <img src="${riderWaiteImagePath}" alt="${card.name}" class="card-image" onerror="this.style.display='none'">
+                        <p><strong>Значение:</strong> ${card.meaning}</p>
+                        <p><strong>Совет:</strong> ${card.advice}</p>
+                        <p><strong>Ключевые слова:</strong> ${card.keywords}</p>
+                        <p><strong>Толкование:</strong> ${data.interpretation}</p>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `<h3>❌ Ошибка:</h3><p>${data.error}</p>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<h3>❌ Ошибка сети:</h3><p>${error.message}</p>`;
+            }
+        }
+
+        async function getThreeCards() {
+            if (!token) {
+                alert('Сначала выполните аутентификацию!');
+                return;
+            }
+            
+            const resultDiv = document.getElementById('card-result');
+            resultDiv.innerHTML = 'Вытягиваем три карты...';
+            
+            try {
+                const response = await fetch('http://localhost:3001/api/tarot/three-cards', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ category: 'personal' })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    let cardsHtml = '<h3>🎴 Расклад трех карт</h3>';
+                    const positions = ['Прошлое', 'Настоящее', 'Будущее'];
+                    
+                    // Загружаем подробные описания для каждой карты
+                    for (let i = 0; i < data.cards.length; i++) {
+                        const card = data.cards[i];
+                        const position = positions[i];
+                        
+                        try {
+                            const meaningResponse = await fetch(`http://localhost:3000/tarot_meanings_pro/${card.name}.json`);
+                            let detailedMeaning = null;
+                            if (meaningResponse.ok) {
+                                detailedMeaning = await meaningResponse.json();
+                            }
+                            
+                            const riderWaiteImagePath = getRiderWaiteImagePath(card.name);
+                            
+                            cardsHtml += `
+                                <div style="margin: 20px 0; padding: 20px; background: rgba(255,255,255,0.1); border-radius: 15px; border: 1px solid rgba(255,255,255,0.2);">
+                                    <div style="display: flex; gap: 15px; margin-bottom: 15px;">
+                                        <img src="${riderWaiteImagePath}" alt="${card.name}" style="width: 120px; height: 180px; object-fit: cover; border-radius: 8px;" onerror="this.style.display='none'">
+                                        <div style="flex: 1;">
+                                            <h4 style="color: #fbbf24; margin: 0 0 5px 0;">${position}: ${card.name}</h4>
+                                            <p style="margin: 0 0 10px 0; color: #e5e7eb;"><strong>Значение:</strong> ${card.meaning}</p>
+                                            <p style="margin: 0; color: #e5e7eb;"><strong>Совет:</strong> ${card.advice}</p>
+                                        </div>
+                                    </div>
+                                    ${detailedMeaning ? `
+                                        <div style="background: rgba(255,255,255,0.05); border-radius: 10px; padding: 15px;">
+                                            <h5 style="color: #f59e0b; margin: 0 0 10px 0;">📖 Подробные описания:</h5>
+                                            <div style="display: grid; gap: 10px;">
+                                                <div><strong style="color: #ec4899;">💕 Любовь:</strong> <span style="color: #d1d5db;">${detailedMeaning.love}</span></div>
+                                                <div><strong style="color: #3b82f6;">💼 Карьера:</strong> <span style="color: #d1d5db;">${detailedMeaning.career}</span></div>
+                                                <div><strong style="color: #8b5cf6;">✨ Личное:</strong> <span style="color: #d1d5db;">${detailedMeaning.personal}</span></div>
+                                            </div>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            `;
+                        } catch (error) {
+                            console.warn(`Не удалось загрузить подробное описание для ${card.name}:`, error);
+                            const riderWaiteImagePath = getRiderWaiteImagePath(card.name);
+                            cardsHtml += `
+                                <div style="margin: 20px 0; padding: 15px; background: rgba(255,255,255,0.1); border-radius: 10px;">
+                                    <h4>${position}: ${card.name}</h4>
+                                    <img src="${riderWaiteImagePath}" alt="${card.name}" style="width: 150px; height: 225px; object-fit: cover; border-radius: 8px; margin: 10px 0;" onerror="this.style.display='none'">
+                                    <p><strong>Значение:</strong> ${card.meaning}</p>
+                                    <p><strong>Совет:</strong> ${card.advice}</p>
+                                </div>
+                            `;
+                        }
+                    }
+                    
+                    cardsHtml += `<p style="margin-top: 20px; padding: 15px; background: rgba(59, 130, 246, 0.1); border-radius: 10px; border: 1px solid rgba(59, 130, 246, 0.3);"><strong style="color: #3b82f6;">🔮 Общее толкование:</strong> <span style="color: #d1d5db;">${data.interpretation}</span></p>`;
+                    resultDiv.innerHTML = cardsHtml;
+                } else {
+                    resultDiv.innerHTML = `<h3>❌ Ошибка:</h3><p>${data.error}</p>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<h3>❌ Ошибка сети:</h3><p>${error.message}</p>`;
+            }
+        }
+
+        async function getYesNoCard() {
+            if (!token) {
+                alert('Сначала выполните аутентификацию!');
+                return;
+            }
+            
+            const resultDiv = document.getElementById('card-result');
+            resultDiv.innerHTML = 'Вытягиваем карту для ответа Да/Нет...';
+            
+            try {
+                const response = await fetch('http://localhost:3001/api/tarot/single-card', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({})
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    const card = data.card;
+                    const riderWaiteImagePath = getRiderWaiteImagePath(card.name);
+                    const isYes = card.number % 2 === 0;
+                    
+                    resultDiv.innerHTML = `
+                        <h3>❓ Ответ Да/Нет</h3>
+                        <div style="text-align: center; margin: 20px 0;">
+                            <div style="display: inline-flex; align-items: center; justify-content: center; width: 80px; height: 80px; border-radius: 50%; background: ${isYes ? '#10b981' : '#ef4444'}; margin-bottom: 20px;">
+                                <span style="font-size: 24px; font-weight: bold; color: white;">${isYes ? '✓' : '✗'}</span>
+                            </div>
+                            <h2 style="color: ${isYes ? '#10b981' : '#ef4444'}; font-size: 48px; margin: 0;">${isYes ? 'ДА' : 'НЕТ'}</h2>
+                            <p style="color: #9ca3af; margin-top: 10px;">Ответ на ваш вопрос</p>
+                        </div>
+                        <div style="background: rgba(255,255,255,0.1); border-radius: 15px; padding: 20px; margin: 20px 0;">
+                            <div style="text-align: center;">
+                                <img src="${riderWaiteImagePath}" alt="${card.name}" style="width: 150px; height: 225px; object-fit: cover; border-radius: 8px; margin-bottom: 15px;" onerror="this.style.display='none'">
+                                <h4 style="color: #fbbf24; margin: 0 0 10px 0;">${card.name}</h4>
+                                <p style="margin: 0; color: #e5e7eb;"><strong>Значение:</strong> ${card.meaning}</p>
+                                <p style="margin: 10px 0 0 0; color: #e5e7eb;"><strong>Совет:</strong> ${card.advice}</p>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `<h3>❌ Ошибка:</h3><p>${data.error}</p>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<h3>❌ Ошибка сети:</h3><p>${error.message}</p>`;
+            }
+        }
+    </script>
+</body>
+</html>

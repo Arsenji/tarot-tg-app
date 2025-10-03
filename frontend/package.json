@@ -1,0 +1,32 @@
+{
+  "name": "tarot-tg-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start -p $PORT",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@radix-ui/react-select": "^2.2.6",
+    "@twa-dev/sdk": "^8.0.2",
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.0.0",
+    "@types/react-dom": "^18.0.0",
+    "autoprefixer": "^10.4.21",
+    "framer-motion": "^10.16.0",
+    "lucide-react": "^0.544.0",
+    "motion": "^12.23.19",
+    "next": "^14.0.0",
+    "postcss": "^8.5.6",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.0.0"
+  },
+  "devDependencies": {
+    "eslint": "^8.0.0",
+    "eslint-config-next": "^14.0.0"
+  }
+}
