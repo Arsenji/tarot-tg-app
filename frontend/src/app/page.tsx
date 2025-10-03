@@ -32,10 +32,10 @@ export default function Home() {
       } catch (error) {
         console.log('Telegram WebApp SDK not available:', error);
       }
-  }
+    }
 
-            // Отключаем мониторинг производительности - он вызывает проблемы
-            // initPerformanceMonitoring();
+    // Отключаем мониторинг производительности - он вызывает проблемы
+    // initPerformanceMonitoring();
   }, []);
 
   const handleStart = () => {
