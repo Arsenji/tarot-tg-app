@@ -14,7 +14,9 @@ RUN npm ci
 COPY . .
 
 # Собираем TypeScript в JavaScript (только backend)
-RUN npm run build:backend
+WORKDIR /app/backend
+RUN npm run build
+WORKDIR /app
 
 # Удаляем dev-зависимости для оптимизации размера образа
 RUN npm prune --production
