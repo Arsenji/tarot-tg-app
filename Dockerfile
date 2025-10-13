@@ -7,14 +7,17 @@ WORKDIR /app
 # Копируем package.json и package-lock.json
 COPY package*.json ./
 
-# Устанавливаем зависимости
-RUN npm ci --only=production
+# Устанавливаем зависимости (включая dev для сборки)
+RUN npm ci
 
 # Копируем исходный код
 COPY . .
 
-# Собираем TypeScript в JavaScript
-RUN npm run build
+# Собираем TypeScript в JavaScript (только backend)
+RUN npm run build:backend
+
+# Удаляем dev-зависимости для оптимизации размера образа
+RUN npm prune --production
 
 # Создаём пользователя для безопасности
 RUN addgroup -g 1001 -S nodejs
