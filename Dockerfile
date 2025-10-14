@@ -36,12 +36,12 @@ USER backend
 # Открываем порт
 EXPOSE 3001
 
-# Команда запуска (используем скомпилированные файлы из backend/dist)
-WORKDIR /app/backend
+# Команда запуска (используем скомпилированные файлы из корневой dist)
+WORKDIR /app
 
 # Отладка: проверяем файлы перед запуском
-RUN echo "=== Проверка backend/dist/index.js ===" && ls -la /app/backend/dist/index.js || echo "backend/dist/index.js not found"
+RUN echo "=== Проверка корневого dist/index.js ===" && ls -la /app/dist/index.js || echo "dist/index.js not found"
 RUN echo "=== Текущая директория ===" && pwd
-RUN echo "=== Содержимое /app/backend/dist/ ===" && ls -la /app/backend/dist/ || echo "backend/dist not found"
+RUN echo "=== Содержимое /app/dist/ ===" && ls -la /app/dist/ || echo "dist not found"
 
 CMD ["node", "dist/index.js"]

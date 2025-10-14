@@ -20,6 +20,6 @@ build
 out
 admin-frontend
 frontend
-# Исключаем dist только для frontend, но оставляем backend/dist
+# Исключаем dist только для frontend, но оставляем корневую dist
 frontend/dist
 frontend/out
