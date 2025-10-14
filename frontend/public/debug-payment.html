@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Payment - Tarot App</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 600px;
+            width: 100%;
+            color: white;
+        }
+        .title {
+            text-align: center;
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+        .debug-section {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .debug-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .debug-content {
+            font-family: monospace;
+            font-size: 14px;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px;
+            border-radius: 5px;
+            word-break: break-all;
+            white-space: pre-wrap;
+        }
+        .button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 20px;
+        }
+        .button:hover {
+            background: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="title">🔍 Debug Payment Page</h1>
+        
+        <div class="debug-section">
+            <div class="debug-title">📋 Current URL:</div>
+            <div class="debug-content" id="currentUrl"></div>
+        </div>
+        
+        <div class="debug-section">
+            <div class="debug-title">🔗 URL Parameters:</div>
+            <div class="debug-content" id="urlParams"></div>
+        </div>
+        
+        <div class="debug-section">
+            <div class="debug-title">🌐 User Agent:</div>
+            <div class="debug-content" id="userAgent"></div>
+        </div>
+        
+        <div class="debug-section">
+            <div class="debug-title">📱 Telegram WebApp Info:</div>
+            <div class="debug-content" id="telegramInfo"></div>
+        </div>
+        
+        <button class="button" onclick="closeWebApp()">🔙 Вернуться в бота</button>
+    </div>
+
+    <script>
+        // Отображаем текущий URL
+        document.getElementById('currentUrl').textContent = window.location.href;
+        
+        // Парсим URL параметры
+        const urlParams = new URLSearchParams(window.location.search);
+        const params = {};
+        for (const [key, value] of urlParams) {
+            params[key] = value;
+        }
+        document.getElementById('urlParams').textContent = JSON.stringify(params, null, 2);
+        
+        // Отображаем User Agent
+        document.getElementById('userAgent').textContent = navigator.userAgent;
+        
+        // Проверяем Telegram WebApp
+        const telegramInfo = {
+            isTelegram: typeof window.Telegram !== 'undefined',
+            webApp: typeof window.Telegram?.WebApp !== 'undefined',
+            initData: window.Telegram?.WebApp?.initData || 'Not available',
+            version: window.Telegram?.WebApp?.version || 'Not available',
+            platform: window.Telegram?.WebApp?.platform || 'Not available'
+        };
+        document.getElementById('telegramInfo').textContent = JSON.stringify(telegramInfo, null, 2);
+        
+        // Функция закрытия WebApp
+        function closeWebApp() {
+            if (window.Telegram?.WebApp) {
+                window.Telegram.WebApp.close();
+            } else {
+                alert('Telegram WebApp не найден. Закройте страницу вручную.');
+            }
+        }
+        
+        // Автоматически закрываем через 10 секунд
+        setTimeout(() => {
+            if (window.Telegram?.WebApp) {
+                window.Telegram.WebApp.close();
+            }
+        }, 10000);
+    </script>
+</body>
+</html>
