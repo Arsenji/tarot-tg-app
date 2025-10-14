@@ -15,9 +15,11 @@ logs
 .idea
 coverage
 .nyc_output
-dist
 build
 .next
 out
 admin-frontend
 frontend
+# Исключаем dist только для frontend, но оставляем backend/dist
+frontend/dist
+frontend/out
