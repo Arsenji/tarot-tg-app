@@ -13,10 +13,8 @@ RUN npm ci
 # Копируем исходный код
 COPY . .
 
-# Собираем TypeScript в JavaScript (только backend)
-WORKDIR /app/backend
-RUN npm run build
-WORKDIR /app
+# Backend уже скомпилирован в dist/, пропускаем сборку
+# RUN npm run build
 
 # Удаляем dev-зависимости для оптимизации размера образа
 RUN npm prune --production
@@ -32,5 +30,6 @@ USER backend
 # Открываем порт
 EXPOSE 3001
 
-# Команда запуска
-CMD ["npm", "start"]
+# Команда запуска (используем скомпилированные файлы из dist)
+WORKDIR /app/backend
+CMD ["node", "dist/index.js"]
