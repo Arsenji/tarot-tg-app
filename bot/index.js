@@ -247,7 +247,17 @@ const initializeBot = () => {
                 });
             }
             catch (paymentError) {
-                logger_1.default.error('Payment creation failed', { error: paymentError, userId });
+                logger_1.default.error('Payment creation failed', { 
+                    error: paymentError, 
+                    userId,
+                    planType,
+                    planPrice: plan.price,
+                    yooKassaShopId: process.env.YOOKASSA_SHOP_ID ? 'SET' : 'NOT_SET',
+                    yooKassaSecretKey: process.env.YOOKASSA_SECRET_KEY ? 'SET' : 'NOT_SET',
+                    frontendUrl: process.env.FRONTEND_URL,
+                    errorMessage: paymentError.message,
+                    errorStack: paymentError.stack
+                });
                 await ctx.answerCbQuery('Ошибка создания платежа');
                 await ctx.editMessageText(`❌ Ошибка при создании платежа\n\n` +
                     `Попробуйте позже или обратитесь в поддержку.`, telegraf_1.Markup.inlineKeyboard([

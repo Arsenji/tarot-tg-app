@@ -16,6 +16,16 @@ class YooKassaService {
     }
     async createPayment(amount, description, userId, planType, returnUrl) {
         try {
+            console.log('🔧 YooKassa createPayment called with:', {
+                amount,
+                description,
+                userId,
+                planType,
+                returnUrl,
+                shopId: this.shopId ? 'SET' : 'NOT_SET',
+                secretKey: this.secretKey ? 'SET' : 'NOT_SET'
+            });
+            
             const paymentData = {
                 amount: {
                     value: amount.toFixed(2),
