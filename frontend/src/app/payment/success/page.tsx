@@ -17,6 +17,27 @@ function PaymentSuccessContent() {
   useEffect(() => {
     const checkPaymentStatus = async () => {
       try {
+        // Проверяем, не была ли отмена платежа
+        const isCancelled = searchParams?.get('cancel') === 'true' || 
+                           searchParams?.get('cancelled') === 'true' ||
+                           searchParams?.get('status') === 'cancelled';
+        
+        if (isCancelled) {
+          console.log('❌ Payment was cancelled');
+          setStatus('error');
+          setMessage('Платеж был отменен. Вы будете перенаправлены обратно в Telegram бота.');
+          
+          // Перенаправляем обратно в Telegram бота через 3 секунды
+          setTimeout(() => {
+            if (typeof window !== 'undefined' && (window as any).Telegram?.WebApp) {
+              (window as any).Telegram.WebApp.close();
+            } else {
+              router.push('/');
+            }
+          }, 3000);
+          return;
+        }
+        
         // Получаем ID платежа из URL параметров
         // YooKassa может возвращать параметры в разных форматах
         const paymentId = searchParams?.get('paymentId') || 
@@ -29,6 +50,9 @@ function PaymentSuccessContent() {
           payment_id: searchParams?.get('payment_id'),
           orderId: searchParams?.get('orderId'),
           order_id: searchParams?.get('order_id'),
+          cancel: searchParams?.get('cancel'),
+          cancelled: searchParams?.get('cancelled'),
+          status: searchParams?.get('status'),
           all: Array.from(searchParams?.entries() || [])
         });
         
