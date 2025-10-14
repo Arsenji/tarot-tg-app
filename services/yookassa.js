@@ -33,7 +33,8 @@ class YooKassaService {
                 },
                 confirmation: {
                     type: 'redirect',
-                    return_url: returnUrl.replace('/payment/success', '/debug-payment')
+                    return_url: returnUrl,
+                    cancel_url: returnUrl.replace('/payment/success', '/payment/cancel')
                 },
                 capture: true,
                 description,
