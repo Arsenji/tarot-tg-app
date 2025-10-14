@@ -10,6 +10,9 @@ COPY package*.json ./
 # Устанавливаем зависимости (включая dev для сборки)
 RUN npm ci
 
+# Принудительно устанавливаем типы Node.js
+RUN npm install --save-dev @types/node
+
 # Копируем исходный код
 COPY . .
 
