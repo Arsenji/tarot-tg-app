@@ -69,6 +69,16 @@ class YooKassaService {
                 returnUrl
             });
             
+            console.log('📤 Sending request to YooKassa API:', {
+                url: `${this.baseUrl}/payments`,
+                headers: {
+                    'Authorization': this.getAuthHeader().substring(0, 20) + '...',
+                    'Content-Type': 'application/json',
+                    'Idempotence-Key': `${userId}_${planType}_${Date.now()}`
+                },
+                paymentData: JSON.stringify(paymentData, null, 2)
+            });
+            
             const response = await axios_1.default.post(`${this.baseUrl}/payments`, paymentData, {
                 headers: {
                     'Authorization': this.getAuthHeader(),
@@ -90,8 +100,23 @@ class YooKassaService {
             console.error('Error details:', {
                 message: error.message,
                 response: error.response?.data,
-                status: error.response?.status
+                status: error.response?.status,
+                statusText: error.response?.statusText,
+                headers: error.response?.headers
             });
+            
+            // Если есть детали ошибки от YooKassa, показываем их
+            if (error.response?.data) {
+                const yooKassaError = error.response.data;
+                console.error('YooKassa API Error:', {
+                    type: yooKassaError.type,
+                    id: yooKassaError.id,
+                    code: yooKassaError.code,
+                    description: yooKassaError.description,
+                    parameter: yooKassaError.parameter
+                });
+            }
+            
             throw new Error('Failed to create payment');
         }
     }
