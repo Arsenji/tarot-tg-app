@@ -16,7 +16,8 @@ COPY . .
 # Отладка: проверяем что скопировалось
 RUN echo "=== Структура /app ===" && ls -la /app/
 RUN echo "=== Структура /app/backend ===" && ls -la /app/backend/ || echo "backend not found"
-RUN echo "=== Структура /app/backend/dist ===" && ls -la /app/backend/dist/ || echo "backend/dist not found"
+RUN echo "=== Что в /app/backend/ ===" && find /app/backend -type f -name "*.js" | head -10
+RUN echo "=== Поиск index.js ===" && find /app -name "index.js" -type f
 
 # Backend уже скомпилирован в dist/, пропускаем сборку
 # RUN npm run build
@@ -35,12 +36,12 @@ USER backend
 # Открываем порт
 EXPOSE 3001
 
-# Команда запуска (используем скомпилированные файлы из dist)
+# Команда запуска (используем скомпилированные файлы из backend/dist)
 WORKDIR /app/backend
 
 # Отладка: проверяем файлы перед запуском
-RUN echo "=== Проверка dist/index.js ===" && ls -la dist/index.js || echo "index.js not found"
+RUN echo "=== Проверка backend/dist/index.js ===" && ls -la /app/backend/dist/index.js || echo "backend/dist/index.js not found"
 RUN echo "=== Текущая директория ===" && pwd
-RUN echo "=== Содержимое dist/ ===" && ls -la dist/ || echo "dist not found"
+RUN echo "=== Содержимое /app/backend/dist/ ===" && ls -la /app/backend/dist/ || echo "backend/dist not found"
 
 CMD ["node", "dist/index.js"]
