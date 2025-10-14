@@ -16,11 +16,8 @@ RUN npm install --save-dev @types/node
 # Копируем исходный код
 COPY . .
 
-# Собираем TypeScript в JavaScript
-RUN echo "=== Запуск сборки TypeScript ===" && npm run build
-
-# Отладка: проверяем что собралось
-RUN echo "=== Структура /app после сборки ===" && ls -la /app/
+# Отладка: проверяем что скопировалось
+RUN echo "=== Структура /app ===" && ls -la /app/
 RUN echo "=== Содержимое /app/dist/ ===" && ls -la /app/dist/ || echo "dist not found"
 RUN echo "=== Проверка /app/dist/index.js ===" && ls -la /app/dist/index.js || echo "index.js not found"
 
@@ -38,6 +35,6 @@ USER backend
 # Открываем порт
 EXPOSE 3001
 
-# Команда запуска (используем скомпилированные файлы из корневой dist)
+# Команда запуска (используем корневой index.js)
 WORKDIR /app
-CMD ["node", "dist/index.js"]
+CMD ["node", "index.js"]

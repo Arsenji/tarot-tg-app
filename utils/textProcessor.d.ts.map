@@ -1,0 +1,1 @@
+{"version":3,"file":"textProcessor.d.ts","sourceRoot":"","sources":["../../src/utils/textProcessor.ts"],"names":[],"mappings":"AAAA,qBAAa,aAAa;IACxB;;OAEG;IACH,MAAM,CAAC,WAAW,CAAC,IAAI,EAAE,MAAM,GAAG,MAAM;IAoCxC;;OAEG;IACH,MAAM,CAAC,UAAU,CAAC,IAAI,EAAE,MAAM,GAAG,MAAM;CAaxC"}
