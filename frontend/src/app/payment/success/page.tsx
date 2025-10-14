@@ -13,6 +13,7 @@ function PaymentSuccessContent() {
   const router = useRouter();
   const [status, setStatus] = useState<'checking' | 'success' | 'error'>('checking');
   const [message, setMessage] = useState('Проверяем статус платежа...');
+  const [debugInfo, setDebugInfo] = useState<string>('');
 
   useEffect(() => {
     const checkPaymentStatus = async () => {
@@ -45,7 +46,7 @@ function PaymentSuccessContent() {
                          searchParams?.get('orderId') ||
                          searchParams?.get('order_id');
         
-        console.log('🔍 URL search params:', {
+        const urlParams = {
           paymentId: searchParams?.get('paymentId'),
           payment_id: searchParams?.get('payment_id'),
           orderId: searchParams?.get('orderId'),
@@ -54,7 +55,12 @@ function PaymentSuccessContent() {
           cancelled: searchParams?.get('cancelled'),
           status: searchParams?.get('status'),
           all: Array.from(searchParams?.entries() || [])
-        });
+        };
+        
+        console.log('🔍 URL search params:', urlParams);
+        
+        // Показываем URL параметры на странице для диагностики
+        setDebugInfo(`URL параметры: ${JSON.stringify(urlParams, null, 2)}`);
         
         if (!paymentId) {
           console.error('Payment ID not found in URL');
@@ -178,6 +184,16 @@ function PaymentSuccessContent() {
           <p className="text-gray-300 text-center">
             {message}
           </p>
+
+          {/* Debug Info */}
+          {debugInfo && (
+            <div className="mt-4 p-4 bg-black/20 rounded-lg">
+              <h3 className="text-white text-sm font-semibold mb-2">🔍 Диагностика:</h3>
+              <pre className="text-xs text-gray-300 whitespace-pre-wrap break-all">
+                {debugInfo}
+              </pre>
+            </div>
+          )}
 
           {/* Button */}
           {status !== 'checking' && (
