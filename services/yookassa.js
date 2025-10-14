@@ -37,6 +37,24 @@ class YooKassaService {
                 },
                 capture: true,
                 description,
+                receipt: {
+                    customer: {
+                        email: `user_${userId}@tarot-app.local`
+                    },
+                    items: [
+                        {
+                            description: description,
+                            quantity: '1.00',
+                            amount: {
+                                value: amount.toFixed(2),
+                                currency: 'RUB'
+                            },
+                            vat_code: 1, // НДС не облагается
+                            payment_mode: 'full_payment',
+                            payment_subject: 'service'
+                        }
+                    ]
+                },
                 metadata: {
                     userId,
                     planType
