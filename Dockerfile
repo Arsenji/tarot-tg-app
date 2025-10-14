@@ -13,6 +13,9 @@ RUN npm ci
 # Копируем исходный код
 COPY . .
 
+# Проверяем структуру файлов (для отладки)
+RUN ls -la /app/backend/dist/ || echo "Backend dist not found"
+
 # Backend уже скомпилирован в dist/, пропускаем сборку
 # RUN npm run build
 
@@ -32,4 +35,8 @@ EXPOSE 3001
 
 # Команда запуска (используем скомпилированные файлы из dist)
 WORKDIR /app/backend
+
+# Проверяем, что файл существует
+RUN ls -la dist/index.js || echo "index.js not found in dist"
+
 CMD ["node", "dist/index.js"]
