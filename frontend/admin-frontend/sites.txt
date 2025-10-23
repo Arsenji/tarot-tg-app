@@ -1,3 +1,0 @@
-User-agent: *
-Disallow: /none
-Sitemap: https://tarot-tg-admin-front.onrender.com/

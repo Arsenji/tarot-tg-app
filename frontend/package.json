@@ -11,9 +11,6 @@
   "dependencies": {
     "@radix-ui/react-select": "^2.2.6",
     "@twa-dev/sdk": "^8.0.2",
-    "@types/node": "^20.11.24",
-    "@types/react": "^18.2.61",
-    "@types/react-dom": "^18.2.19",
     "autoprefixer": "^10.4.21",
     "framer-motion": "^10.16.0",
     "lucide-react": "^0.544.0",
@@ -22,11 +19,14 @@
     "postcss": "^8.5.6",
     "react": "^18.0.0",
     "react-dom": "^18.0.0",
-    "tailwindcss": "^3.4.17",
-    "typescript": "^5.3.3"
+    "tailwindcss": "^3.4.17"
   },
   "devDependencies": {
+    "@types/node": "^20.11.24",
+    "@types/react": "^18.2.61",
+    "@types/react-dom": "^18.2.19",
     "eslint": "^8.0.0",
-    "eslint-config-next": "^14.0.0"
+    "eslint-config-next": "^14.0.0",
+    "typescript": "^5.3.3"
   }
 }
