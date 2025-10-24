@@ -34,7 +34,7 @@ const RealisticBackgroundCards: React.FC = () => {
       opacity: 0,
       isVisible: false,
       cardName: randomCard.name,
-      imagePath: randomCard.imagePath,
+      imagePath: randomCard.image,
     };
   };
 

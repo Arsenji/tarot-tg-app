@@ -1,6 +1,19 @@
 import { cache, historyCache, dailyAdviceCache, getCurrentDate } from '@/utils/cache';
 import { getValidAuthToken } from '@/utils/auth';
 
+export interface CardData {
+  id: string;
+  name: string;
+  image: string;
+  keywords: string;
+  advice: string;
+  meaning: string;
+  isMajorArcana: boolean;
+  suit?: string;
+  number?: number;
+  reversed?: boolean;
+}
+
 export interface ApiResponse<T> {
   success: boolean;
   data: T;
@@ -142,7 +155,7 @@ class ApiService {
     }
   }
 
-  async getDailyAdvice(): Promise<ApiResponse<String>> {
+  async getDailyAdvice(): Promise<ApiResponse<DailyAdviceResponse>> {
     // Отключаем кэширование для получения разных карт каждый раз
     const response = await this.request<DailyAdviceResponse>('/api/tarot/daily-advice', {
       method: 'POST',

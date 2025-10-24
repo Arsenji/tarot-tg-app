@@ -36,9 +36,11 @@ export const getAuthToken = async (): Promise<string | null> => {
         token = authData.token;
         
         // Сохраняем токен в localStorage
-        localStorage.setItem('authToken', token);
-        if (authData.expires) {
-          localStorage.setItem('tokenExpires', authData.expires.toString());
+        if (token) {
+          localStorage.setItem('authToken', token);
+          if (authData.expires) {
+            localStorage.setItem('tokenExpires', authData.expires.toString());
+          }
         }
       } else {
         console.error('Auth response failed:', authResponse.status, authResponse.statusText);

@@ -69,7 +69,6 @@ export function SubscriptionStatus({
         {!subscriptionInfo.hasSubscription && onUpgrade && (
           <Button
             onClick={onUpgrade}
-            size="sm"
             className="ml-2 px-3 py-1 bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 border border-amber-400/30 rounded-lg text-xs"
           >
             <Crown className="w-3 h-3 mr-1" />
