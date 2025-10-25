@@ -2,7 +2,6 @@ node_modules
 npm-debug.log
 .git
 .gitignore
-README.md
 .env
 .env.local
 .env.development.local
@@ -18,8 +17,17 @@ coverage
 build
 .next
 out
+# Исключаем скомпилированные файлы
+dist
+# Исключаем фронт и админку при сборке backend
 admin-frontend
+admin-backend
 frontend
-# Исключаем dist только для frontend, но оставляем корневую dist
-frontend/dist
-frontend/out
+# Документация и отчеты
+*.md
+RENDER_*.md
+PRODUCTION_*.md
+DEPLOYMENT_*.md
+JWT_*.md
+WEBAPP_*.md
+YOOKASSA_*.md

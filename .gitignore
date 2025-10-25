@@ -24,11 +24,22 @@ mongodb-data/
 redis-data/
 
 # Compiled files
-*.js
+# Игнорируем скомпилированные JS файлы только в определенных директориях
+dist/**/*.js
+backend/dist/**/*.js
+admin-backend/dist/**/*.js
 *.d.ts
 *.map
+# Разрешаем конфигурационные файлы
+!*.config.js
+!next.config.js
+!tailwind.config.js
+!postcss.config.js
+# Разрешаем package файлы
 !package.json
 !package-lock.json
+# Разрешаем скрипты
+!scripts/**/*.js
 
 # IDE files
 .vscode/
