@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { motion } from 'motion/react';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/ui/Button';
 import { FloatingCard } from '@/components/FloatingCard';
 import { TarotLogo } from '@/components/TarotLogo';
 import { Sparkles, Moon, Star } from 'lucide-react';

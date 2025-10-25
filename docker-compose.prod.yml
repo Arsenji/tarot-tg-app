@@ -1,0 +1,301 @@
+version: '3.8'
+
+# Продакшен конфигурация с максимальной безопасностью
+services:
+  # MongoDB для основного приложения
+  mongodb:
+    image: mongo:7.0
+    container_name: tarot-mongodb-prod
+    restart: unless-stopped
+    # Полностью закрытые порты - только внутренняя сеть
+    expose:
+      - "27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
+      MONGO_INITDB_DATABASE: ${MONGO_DATABASE}
+    volumes:
+      - mongodb_data:/data/db
+      - ./mongo-init:/docker-entrypoint-initdb.d
+    networks:
+      - tarot-internal-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    # Строгие ограничения ресурсов
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+    # Безопасность контейнера
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/run
+    user: "999:999" # MongoDB user
+
+  # Redis для кеширования
+  redis:
+    image: redis:7-alpine
+    container_name: tarot-redis-prod
+    restart: unless-stopped
+    # Полностью закрытые порты
+    expose:
+      - "6379"
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD} --bind 0.0.0.0 --protected-mode yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - tarot-internal-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    # Строгие ограничения ресурсов
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.25'
+        reservations:
+          memory: 256M
+          cpus: '0.1'
+    # Безопасность контейнера
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    user: "999:999" # Redis user
+
+  # Backend API
+  backend:
+    build: .
+    container_name: tarot-backend-prod
+    restart: unless-stopped
+    # Только необходимые порты открыты наружу
+    ports:
+      - "${BACKEND_PORT:-3001}:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - MONGODB_URI=mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongodb:27017/${MONGO_DATABASE}?authSource=admin
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-30d}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - ADMIN_TELEGRAM_ID=${ADMIN_TELEGRAM_ID}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - YOOKASSA_SHOP_ID=${YOOKASSA_SHOP_ID}
+      - YOOKASSA_SECRET_KEY=${YOOKASSA_SECRET_KEY}
+      - FRONTEND_URL=${FRONTEND_URL}
+      - DISABLE_TELEGRAM_BOT=${DISABLE_TELEGRAM_BOT:-false}
+      - ALLOW_NO_MONGODB=${ALLOW_NO_MONGODB:-false}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./logs:/app/logs:ro # Только для чтения
+    networks:
+      - tarot-internal-network
+      - tarot-external-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    # Строгие ограничения ресурсов
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+    # Безопасность контейнера
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/logs
+    user: "1000:1000" # Node.js user
+
+  # Frontend (Next.js)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: tarot-frontend-prod
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+      - NEXT_PUBLIC_TELEGRAM_BOT_USERNAME=${TELEGRAM_BOT_USERNAME}
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - tarot-external-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    # Строгие ограничения ресурсов
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+    # Безопасность контейнера
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    user: "1000:1000" # Node.js user
+
+  # Admin Backend
+  admin-backend:
+    build:
+      context: ./admin-backend
+      dockerfile: Dockerfile
+    container_name: tarot-admin-backend-prod
+    restart: unless-stopped
+    ports:
+      - "${ADMIN_BACKEND_PORT:-3002}:3002"
+    environment:
+      - NODE_ENV=production
+      - PORT=3002
+      - MONGODB_URI=mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongodb:27017/${MONGO_ADMIN_DATABASE}?authSource=admin
+      - JWT_SECRET=${ADMIN_JWT_SECRET}
+      - JWT_EXPIRES_IN=${ADMIN_JWT_EXPIRES_IN:-24h}
+      - ADMIN_USERNAME=${ADMIN_USERNAME}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - ADMIN_TELEGRAM_ID=${ADMIN_TELEGRAM_ID}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - tarot-internal-network
+      - tarot-external-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3002/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    # Строгие ограничения ресурсов
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+    # Безопасность контейнера
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    user: "1000:1000" # Node.js user
+
+  # Admin Frontend
+  admin-frontend:
+    build:
+      context: ./admin-frontend
+      dockerfile: Dockerfile
+    container_name: tarot-admin-frontend-prod
+    restart: unless-stopped
+    ports:
+      - "${ADMIN_FRONTEND_PORT:-3003}:80"
+    environment:
+      - NODE_ENV=production
+      - REACT_APP_API_URL=${ADMIN_API_URL}
+    depends_on:
+      admin-backend:
+        condition: service_healthy
+    networks:
+      - tarot-external-network
+    # Строгие ограничения ресурсов
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+        reservations:
+          memory: 128M
+          cpus: '0.1'
+    # Безопасность контейнера
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+      - /var/run
+    user: "101:101" # Nginx user
+
+volumes:
+  mongodb_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/mongodb
+  redis_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/redis
+
+networks:
+  # Внутренняя сеть для баз данных и внутренних сервисов
+  tarot-internal-network:
+    driver: bridge
+    internal: true # Полностью изолированная сеть
+    driver_opts:
+      com.docker.network.bridge.enable_icc: "false"
+      com.docker.network.bridge.enable_ip_masquerade: "false"
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24
+
+  # Внешняя сеть для пользовательских сервисов
+  tarot-external-network:
+    driver: bridge
+    internal: false
+    driver_opts:
+      com.docker.network.bridge.enable_icc: "true"
+      com.docker.network.bridge.enable_ip_masquerade: "true"
+      com.docker.network.bridge.host_binding_ipv4: "127.0.0.1"
+    ipam:
+      config:
+        - subnet: 172.21.0.0/24

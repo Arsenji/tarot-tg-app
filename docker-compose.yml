@@ -1,0 +1,194 @@
+version: '3.8'
+
+services:
+  # MongoDB для основного приложения
+  mongodb:
+    image: mongo:7.0
+    container_name: tarot-mongodb
+    restart: unless-stopped
+    # Используем expose вместо ports для внутренней сети
+    expose:
+      - "27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
+      MONGO_INITDB_DATABASE: ${MONGO_DATABASE:-tarot-app}
+    volumes:
+      - mongodb_data:/data/db
+      - ./mongo-init:/docker-entrypoint-initdb.d
+    networks:
+      - tarot-network
+    # Добавляем health check
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    # Ограничиваем ресурсы
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  # Redis для кеширования
+  redis:
+    image: redis:7-alpine
+    container_name: tarot-redis
+    restart: unless-stopped
+    # Используем expose вместо ports для внутренней сети
+    expose:
+      - "6379"
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    networks:
+      - tarot-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    # Ограничиваем ресурсы
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  # Backend API
+  backend:
+    build: .
+    container_name: tarot-backend
+    restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT:-3001}:3001"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=3001
+      - MONGODB_URI=mongodb://${MONGO_ROOT_USERNAME:-admin}:${MONGO_ROOT_PASSWORD}@mongodb:27017/${MONGO_DATABASE:-tarot-app}?authSource=admin
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-30d}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - ADMIN_TELEGRAM_ID=${ADMIN_TELEGRAM_ID}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - YOOKASSA_SHOP_ID=${YOOKASSA_SHOP_ID}
+      - YOOKASSA_SECRET_KEY=${YOOKASSA_SECRET_KEY}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
+      - DISABLE_TELEGRAM_BOT=${DISABLE_TELEGRAM_BOT:-false}
+      - ALLOW_NO_MONGODB=${ALLOW_NO_MONGODB:-false}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - tarot-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Frontend (Next.js)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: tarot-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:3001}
+      - NEXT_PUBLIC_TELEGRAM_BOT_USERNAME=${TELEGRAM_BOT_USERNAME}
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - tarot-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Admin Backend
+  admin-backend:
+    build:
+      context: ./admin-backend
+      dockerfile: Dockerfile
+    container_name: tarot-admin-backend
+    restart: unless-stopped
+    ports:
+      - "${ADMIN_BACKEND_PORT:-3002}:3002"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=3002
+      - MONGODB_URI=mongodb://${MONGO_ROOT_USERNAME:-admin}:${MONGO_ROOT_PASSWORD}@mongodb:27017/${MONGO_ADMIN_DATABASE:-tarot-admin}?authSource=admin
+      - JWT_SECRET=${ADMIN_JWT_SECRET}
+      - JWT_EXPIRES_IN=${ADMIN_JWT_EXPIRES_IN:-24h}
+      - ADMIN_USERNAME=${ADMIN_USERNAME}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - ADMIN_TELEGRAM_ID=${ADMIN_TELEGRAM_ID}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - tarot-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3002/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Admin Frontend
+  admin-frontend:
+    build:
+      context: ./admin-frontend
+      dockerfile: Dockerfile
+    container_name: tarot-admin-frontend
+    restart: unless-stopped
+    ports:
+      - "${ADMIN_FRONTEND_PORT:-3003}:80"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - REACT_APP_API_URL=${ADMIN_API_URL:-http://localhost:3002}
+    depends_on:
+      admin-backend:
+        condition: service_healthy
+    networks:
+      - tarot-network
+
+volumes:
+  mongodb_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  tarot-network:
+    driver: bridge
+    # Изолированная сеть для безопасности
+    internal: false
+    # Настройки безопасности сети
+    driver_opts:
+      com.docker.network.bridge.enable_icc: "true"
+      com.docker.network.bridge.enable_ip_masquerade: "true"
+      com.docker.network.bridge.host_binding_ipv4: "127.0.0.1"
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

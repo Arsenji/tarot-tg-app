@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/ui/Button';
 import { FloatingCard } from '@/components/FloatingCard';
 import { TarotLogo } from '@/components/TarotLogo';
 import BottomNavigation from '@/components/BottomNavigation';
@@ -91,7 +91,7 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
             if (authResponse.ok) {
               const authData = await authResponse.json();
               token = authData.token;
-              localStorage.setItem('authToken', token);
+              localStorage.setItem('authToken', token || '');
             }
           }
           
@@ -107,7 +107,7 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
       const response = await fetch(getApiEndpoint('/tarot/subscription-status'), {
         method: 'GET',
         headers: {
-          'Authorization': token ? `Bearer ${token}` : '',
+          'Authorization': token || '',
         },
       });
       
@@ -170,8 +170,7 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
         <p className="text-gray-300 text-center mb-8">Ваш личный проводник в мир Таро</p>
 
         <SubscriptionStatus 
-          hasSubscription={subscriptionInfo?.hasSubscription} 
-          isExpired={subscriptionInfo?.isExpired}
+          subscriptionInfo={subscriptionInfo}
           onOpenModal={handleOpenSubscriptionModal}
           isLoading={isLoading}
         />
@@ -258,7 +257,12 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
         </div>
       </div>
       <BottomNavigation activeTab={activeTab} onTabChange={onTabChange} />
-      <SubscriptionModal isOpen={isSubscriptionModalOpen} onClose={handleCloseSubscriptionModal} />
+      <SubscriptionModal 
+        isOpen={isSubscriptionModalOpen} 
+        onClose={handleCloseSubscriptionModal}
+        title="Требуется подписка"
+        message="Подписка — это ваш доступ к полному функционалу. Оформите её прямо сейчас и продолжайте работу без ограничений."
+      />
     </div>
   );
 };

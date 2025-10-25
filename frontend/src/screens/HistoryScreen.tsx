@@ -3,7 +3,7 @@
 import { motion } from 'motion/react';
 import BottomNavigation from '@/components/BottomNavigation';
 import { ArrowLeft, Calendar, Clock, Star, Sparkles, X } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/ui/Button';
 import { useState, useEffect } from 'react';
 import { apiService } from '@/services/api';
 import { formatInterpretationText, truncateText } from '@/utils/textFormatting';
@@ -94,7 +94,18 @@ export function HistoryScreen({ onBack, activeTab, onTabChange }: HistoryScreenP
       const response = await apiService.getHistory();
       
       if (response.success && response.data) {
-        setHistory(response.data.readings || []);
+        // Преобразуем TarotReading в HistoryEntry
+        const historyEntries: HistoryEntry[] = (response.data.readings || []).map((reading: any) => ({
+          _id: reading.readingId || reading._id || Math.random().toString(),
+          type: reading.spreadType === 'single' ? 'single' : reading.spreadType === 'three_cards' ? 'three_cards' : 'yes_no',
+          category: reading.category || '',
+          userQuestion: reading.question || '',
+          cards: reading.cards || [],
+          interpretation: reading.interpretation || '',
+          clarifyingQuestions: reading.clarifyingQuestions || [],
+          createdAt: new Date(reading.date || Date.now()).toISOString()
+        }));
+        setHistory(historyEntries);
       } else if (response.subscriptionRequired) {
         // Показываем модальное окно подписки для истории
         setShowSubscriptionModal(true);
@@ -130,7 +141,7 @@ export function HistoryScreen({ onBack, activeTab, onTabChange }: HistoryScreenP
       }
       
       // Получаем подробное описание карты для категории
-      const response = await apiService.getCardDetailedDescription(card.name, category);
+      const response = await apiService.getCardDetailedDescription(card.name);
       
       console.log('API response:', response);
       console.log('Response success:', response.success);

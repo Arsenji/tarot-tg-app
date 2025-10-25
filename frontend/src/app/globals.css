@@ -64,7 +64,7 @@
   animation: cardFloat 4s ease-in-out infinite;
 }
 
-/* Safe area support */
+/* Safe area support for mobile devices */
 .safe-area-inset {
   padding-top: env(safe-area-inset-top);
   padding-bottom: env(safe-area-inset-bottom);
@@ -96,4 +96,285 @@
   background: rgba(0, 0, 0, 0.2);
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Responsive design improvements */
+@layer components {
+  /* Mobile-first button styles */
+  .btn-primary {
+    @apply w-full py-3 px-4 bg-purple-700 hover:bg-purple-800 text-white rounded-lg shadow-lg flex items-center justify-center text-base font-semibold transition-all duration-200;
+  }
+
+  .btn-secondary {
+    @apply w-full py-3 px-4 bg-gray-700 hover:bg-gray-600 text-white rounded-lg shadow-lg flex items-center justify-center text-base font-semibold transition-all duration-200;
+  }
+
+  .btn-small {
+    @apply py-2 px-3 text-sm rounded-md;
+  }
+
+  .btn-large {
+    @apply py-4 px-6 text-lg rounded-xl;
+  }
+
+  /* Responsive card styles */
+  .card {
+    @apply bg-slate-800/90 backdrop-blur-sm rounded-xl p-4 border border-slate-600/30 shadow-lg;
+  }
+
+  .card-large {
+    @apply bg-slate-800/90 backdrop-blur-sm rounded-2xl p-6 border border-slate-600/30 shadow-xl;
+  }
+
+  /* Responsive modal styles */
+  .modal {
+    @apply fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4;
+  }
+
+  .modal-content {
+    @apply bg-slate-800/90 backdrop-blur-sm rounded-2xl p-6 max-w-sm w-full border border-slate-600/30 shadow-2xl;
+  }
+
+  .modal-content-large {
+    @apply bg-slate-800/90 backdrop-blur-sm rounded-2xl p-6 max-w-md w-full border border-slate-600/30 shadow-2xl;
+  }
+
+  /* Responsive text styles */
+  .text-responsive {
+    @apply text-sm sm:text-base md:text-lg;
+  }
+
+  .text-responsive-large {
+    @apply text-lg sm:text-xl md:text-2xl;
+  }
+
+  .text-responsive-small {
+    @apply text-xs sm:text-sm md:text-base;
+  }
+
+  /* Responsive spacing */
+  .spacing-responsive {
+    @apply p-3 sm:p-4 md:p-6;
+  }
+
+  .spacing-responsive-large {
+    @apply p-4 sm:p-6 md:p-8;
+  }
+
+  .spacing-responsive-small {
+    @apply p-2 sm:p-3 md:p-4;
+  }
+
+  /* Responsive margins */
+  .margin-responsive {
+    @apply m-3 sm:m-4 md:m-6;
+  }
+
+  .margin-responsive-large {
+    @apply m-4 sm:m-6 md:m-8;
+  }
+
+  .margin-responsive-small {
+    @apply m-2 sm:m-3 md:m-4;
+  }
+
+  /* Responsive gaps */
+  .gap-responsive {
+    @apply gap-3 sm:gap-4 md:gap-6;
+  }
+
+  .gap-responsive-large {
+    @apply gap-4 sm:gap-6 md:gap-8;
+  }
+
+  .gap-responsive-small {
+    @apply gap-2 sm:gap-3 md:gap-4;
+  }
+}
+
+/* Mobile-specific improvements */
+@media (max-width: 640px) {
+  /* Smaller border radius for mobile */
+  .rounded-xl {
+    border-radius: 0.75rem; /* 12px */
+  }
+
+  .rounded-2xl {
+    border-radius: 1rem; /* 16px */
+  }
+
+  /* Adjust padding for mobile */
+  .p-6 {
+    padding: 1rem; /* 16px */
+  }
+
+  .p-8 {
+    padding: 1.25rem; /* 20px */
+  }
+
+  /* Adjust margins for mobile */
+  .m-6 {
+    margin: 1rem; /* 16px */
+  }
+
+  .m-8 {
+    margin: 1.25rem; /* 20px */
+  }
+
+  /* Adjust gaps for mobile */
+  .gap-6 {
+    gap: 1rem; /* 16px */
+  }
+
+  .gap-8 {
+    gap: 1.25rem; /* 20px */
+  }
+
+  /* Smaller text sizes for mobile */
+  .text-3xl {
+    font-size: 1.5rem; /* 24px */
+    line-height: 2rem; /* 32px */
+  }
+
+  .text-2xl {
+    font-size: 1.25rem; /* 20px */
+    line-height: 1.75rem; /* 28px */
+  }
+
+  .text-xl {
+    font-size: 1.125rem; /* 18px */
+    line-height: 1.5rem; /* 24px */
+  }
+
+  /* Adjust button heights for mobile */
+  .h-12 {
+    height: 2.5rem; /* 40px */
+  }
+
+  .h-16 {
+    height: 3rem; /* 48px */
+  }
+
+  /* Adjust icon sizes for mobile */
+  .w-6 {
+    width: 1.25rem; /* 20px */
+  }
+
+  .h-6 {
+    height: 1.25rem; /* 20px */
+  }
+
+  .w-8 {
+    width: 1.5rem; /* 24px */
+  }
+
+  .h-8 {
+    height: 1.5rem; /* 24px */
+  }
+}
+
+/* Tablet-specific improvements */
+@media (min-width: 641px) and (max-width: 1024px) {
+  /* Medium border radius for tablet */
+  .rounded-xl {
+    border-radius: 0.875rem; /* 14px */
+  }
+
+  .rounded-2xl {
+    border-radius: 1.125rem; /* 18px */
+  }
+
+  /* Medium padding for tablet */
+  .p-6 {
+    padding: 1.5rem; /* 24px */
+  }
+
+  .p-8 {
+    padding: 2rem; /* 32px */
+  }
+}
+
+/* Desktop-specific improvements */
+@media (min-width: 1025px) {
+  /* Full border radius for desktop */
+  .rounded-xl {
+    border-radius: 0.75rem; /* 12px */
+  }
+
+  .rounded-2xl {
+    border-radius: 1rem; /* 16px */
+  }
+
+  /* Full padding for desktop */
+  .p-6 {
+    padding: 1.5rem; /* 24px */
+  }
+
+  .p-8 {
+    padding: 2rem; /* 32px */
+  }
+}
+
+/* High DPI display optimizations */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  /* Ensure crisp borders on high DPI displays */
+  .border {
+    border-width: 0.5px;
+  }
+
+  .border-2 {
+    border-width: 1px;
+  }
+}
+
+/* Dark mode optimizations */
+@media (prefers-color-scheme: dark) {
+  /* Ensure proper contrast in dark mode */
+  .text-gray-300 {
+    color: #d1d5db;
+  }
+
+  .text-gray-400 {
+    color: #9ca3af;
+  }
+
+  .bg-gray-800 {
+    background-color: #1f2937;
+  }
+
+  .bg-gray-900 {
+    background-color: #111827;
+  }
+}
+
+/* Reduced motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  .animate-float,
+  .animate-glow,
+  .animate-sparkle,
+  .animate-card-float {
+    animation: none;
+  }
+
+  * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+/* Print styles */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  body {
+    background: white !important;
+    color: black !important;
+  }
 }

@@ -35,6 +35,6 @@ USER backend
 # Открываем порт
 EXPOSE 3001
 
-# Команда запуска (используем корневой index.js)
+# Команда запуска (используем правильный путь к dist/index.js)
 WORKDIR /app
-CMD ["node", "index.js"]
+CMD ["node", "dist/index.js"]

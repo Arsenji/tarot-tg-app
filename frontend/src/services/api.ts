@@ -213,6 +213,24 @@ class ApiService {
       body: JSON.stringify({ spreadType }),
     });
   }
+
+  async getCardDetailedDescription(cardName: string): Promise<ApiResponse<any>> {
+    return this.request<any>(`/api/tarot/card/${cardName}/description`);
+  }
+
+  async getYesNoAnswer(question: string): Promise<ApiResponse<YesNoResult>> {
+    return this.request<YesNoResult>('/api/tarot/yes-no', {
+      method: 'POST',
+      body: JSON.stringify({ question }),
+    });
+  }
+
+  async getClarifyingAnswer(question: string, cardName: string): Promise<ApiResponse<any>> {
+    return this.request<any>('/api/tarot/clarifying', {
+      method: 'POST',
+      body: JSON.stringify({ question, cardName }),
+    });
+  }
 }
 
 export const apiService = new ApiService();

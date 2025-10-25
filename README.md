@@ -6,7 +6,7 @@ Backend для админ-панели управления сообщениям
 
 - **Node.js** + **Express.js** - веб-сервер
 - **TypeScript** - типизация
-- **PostgreSQL** - база данных
+- **MongoDB** - база данных
 - **JWT** - аутентификация
 - **Telegram Bot API** - интеграция с Telegram
 
@@ -29,8 +29,8 @@ cp env.example .env
 Настройте следующие переменные:
 
 ```env
-# Database
-DATABASE_URL=postgresql://username:password@localhost:5432/tarot_admin
+# MongoDB
+MONGODB_URI=mongodb://localhost:27017/tarot-admin
 
 # JWT
 JWT_SECRET=your-super-secret-jwt-key-here
@@ -49,15 +49,28 @@ PORT=3002
 NODE_ENV=development
 ```
 
-### 3. Настройка PostgreSQL
+### 3. Настройка MongoDB
 
-Создайте базу данных:
+Убедитесь, что MongoDB запущена локально или используйте MongoDB Atlas.
 
-```sql
-CREATE DATABASE tarot_admin;
+Для локальной установки MongoDB:
+```bash
+# macOS
+brew install mongodb-community
+
+# Ubuntu/Debian
+sudo apt-get install mongodb
+
+# Windows
+# Скачайте с https://www.mongodb.com/try/download/community
 ```
 
-Таблицы создаются автоматически при запуске приложения.
+Запустите MongoDB:
+```bash
+mongod
+```
+
+Коллекции создаются автоматически при запуске приложения.
 
 ### 4. Запуск
 

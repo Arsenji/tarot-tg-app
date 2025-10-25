@@ -9,10 +9,10 @@
 
 **Файл `.env`:**
 ```
-YOOKASSA_SHOP_ID=1168307
-YOOKASSA_SECRET_KEY=live_cpuqidJ0u-MVgmH4om9lY_BhGLzgEg2-5xbzEF3xq7c
+YOOKASSA_SHOP_ID=your_yookassa_shop_id
+YOOKASSA_SECRET_KEY=your_yookassa_secret_key
 ```
-✅ Реальные продакшен-ключи настроены корректно
+⚠️ Замените на ваши реальные ключи
 
 **Файл `.env.production`:**
 ```
@@ -25,7 +25,7 @@ YOOKASSA_SECRET_KEY=your_yookassa_secret_key
 
 ```bash
 node -e "require('dotenv').config(); console.log(process.env.YOOKASSA_SHOP_ID)"
-# Результат: 1168307 ✅
+# Результат: your_yookassa_shop_id (замените на реальный)
 ```
 
 ### 3. Проверка логики в коде
@@ -53,7 +53,7 @@ const isYooKassaConfigured = process.env.YOOKASSA_SHOP_ID &&
   process.env.YOOKASSA_SECRET_KEY !== 'test_secret_key';
 console.log('isYooKassaConfigured:', isYooKassaConfigured);
 "
-# Результат: isYooKassaConfigured: true ✅
+# Результат: isYooKassaConfigured: true (если ключи настроены)
 ```
 
 ## 🎯 Возможные причины

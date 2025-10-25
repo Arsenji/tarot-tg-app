@@ -1,12 +1,12 @@
 'use client';
 
 import { motion, AnimatePresence } from 'motion/react';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/ui/Button';
 import { FloatingCard } from '@/components/FloatingCard';
 import { ArrowLeft, Sparkles, RefreshCw } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { ImageWithFallback } from '@/components/figma/ImageWithFallback';
-import { tarotCards } from '@/data/tarotCards';
+import { tarotCards, TarotCard } from '@/data/tarotCards';
 import { apiService } from '@/services/api';
 
 // Фоновые карты для атмосферы
@@ -260,12 +260,16 @@ export function OneCardScreen({ onBack }: OneCardScreenProps) {
       if (response.success && response.data) {
         // Преобразуем карту из API в формат локальных карт
         const apiCard = response.data.card;
-        const localCard = {
-          ...apiCard,
-          image: apiCard.image || '/images/placeholder.png'
+        const localCard: TarotCard = {
+          name: apiCard.name,
+          image: apiCard.uprightImage,
+          keywords: '',
+          advice: '',
+          meaning: '',
+          isMajorArcana: false
         };
         setSelectedCard(localCard);
-        setAiAdvice(response.data.advice);
+        setAiAdvice(response.data.interpretation || '');
       } else {
         
         // Fallback к случайной карте, если API недоступен

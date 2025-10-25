@@ -1,7 +1,7 @@
 'use client';
 
 import { motion, AnimatePresence } from 'motion/react';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/ui/Button';
 import { FloatingCard } from '@/components/FloatingCard';
 import { ArrowLeft, Send, X, AlertCircle } from 'lucide-react';
 import { useState, useEffect } from 'react';
@@ -50,40 +50,80 @@ export function YesNoScreen({ onBack }: YesNoScreenProps) {
   const [selectedCardForDescription, setSelectedCardForDescription] = useState<any>(null);
   const [isInterpretationExpanded, setIsInterpretationExpanded] = useState<{[key: string]: boolean}>({});
 
-  // Валидация вопроса
-  const validateQuestion = (text: string): boolean => {
+  // Улучшенная валидация вопроса
+  const validateQuestion = (text: string): { isValid: boolean; error?: string } => {
     const trimmedText = text.trim();
     
     // Проверяем базовые условия
-    if (trimmedText.length === 0 || !trimmedText.endsWith('?')) {
-      return false;
+    if (trimmedText.length === 0) {
+      return { isValid: false, error: 'Вопрос не может быть пустым' };
+    }
+    
+    if (!trimmedText.endsWith('?')) {
+      return { isValid: false, error: 'Вопрос должен заканчиваться знаком вопроса' };
+    }
+    
+    // Проверяем длину
+    if (trimmedText.length < 10) {
+      return { isValid: false, error: 'Вопрос должен содержать минимум 10 символов' };
+    }
+    
+    if (trimmedText.length > 1000) {
+      return { isValid: false, error: 'Вопрос не должен превышать 1000 символов' };
     }
     
     // Проверяем на осмысленность - должны быть русские или английские слова
     const hasValidWords = /[а-яёА-ЯЁa-zA-Z]{2,}/.test(trimmedText);
     if (!hasValidWords) {
-      return false;
+      return { isValid: false, error: 'Вопрос должен содержать осмысленные слова' };
     }
     
     // Проверяем, что это не только знаки препинания и пробелы
     const meaningfulChars = trimmedText.replace(/[^\wа-яёА-ЯЁ]/g, '').length;
     if (meaningfulChars < 3) {
-      return false;
+      return { isValid: false, error: 'Вопрос должен содержать больше осмысленных символов' };
     }
     
     // Проверяем, что есть хотя бы одно слово длиннее 2 символов
     const words = trimmedText.split(/\s+/).filter(word => word.length > 2);
     if (words.length === 0) {
-      return false;
+      return { isValid: false, error: 'Вопрос должен содержать слова длиннее 2 символов' };
     }
     
-    return true;
+    // Проверяем на спам (повторяющиеся символы)
+    const repeatedChars = /(.)\1{4,}/.test(trimmedText);
+    if (repeatedChars) {
+      return { isValid: false, error: 'Вопрос содержит слишком много повторяющихся символов' };
+    }
+    
+    // Проверяем на HTML теги
+    const hasHtmlTags = /<[^>]*>/.test(trimmedText);
+    if (hasHtmlTags) {
+      return { isValid: false, error: 'Вопрос не может содержать HTML теги' };
+    }
+    
+    // Проверяем на потенциально опасные символы
+    const dangerousChars = /[<>'"]/.test(trimmedText);
+    if (dangerousChars) {
+      return { isValid: false, error: 'Вопрос содержит недопустимые символы' };
+    }
+    
+    // Проверяем на слишком много специальных символов
+    const specialCharsCount = (trimmedText.match(/[!@#$%^&*()_+=\[\]{}|\\:";'<>?,./]/g) || []).length;
+    if (specialCharsCount > trimmedText.length * 0.3) {
+      return { isValid: false, error: 'Вопрос содержит слишком много специальных символов' };
+    }
+    
+    return { isValid: true };
   };
 
   // Начать расклад
   const startReading = async () => {
-    if (!validateQuestion(question)) {
+    const validation = validateQuestion(question);
+    if (!validation.isValid) {
       setShowValidationError(true);
+      // Можно добавить отображение конкретной ошибки
+      console.warn('Validation error:', validation.error);
       return;
     }
 
@@ -94,7 +134,21 @@ export function YesNoScreen({ onBack }: YesNoScreenProps) {
       const response = await apiService.getYesNoAnswer(question);
       
       if (response.success && response.data) {
-        setResult(response.data);
+        setResult({
+          question,
+          card: {
+            name: response.data.card.name,
+            imagePath: response.data.card.uprightImage,
+            keywords: '',
+            meaning: response.data.card.uprightInterpretation,
+            advice: '',
+            isMajorArcana: false,
+            suit: '',
+            number: 0,
+          },
+          answer: response.data.answer,
+          interpretation: response.data.interpretation,
+        });
       } else {
         // Проверяем, требуется ли подписка
         
@@ -111,8 +165,8 @@ export function YesNoScreen({ onBack }: YesNoScreenProps) {
             meaning: randomCard.meaning,
             advice: randomCard.advice,
             isMajorArcana: randomCard.isMajorArcana,
-            suit: randomCard.suit,
-            number: randomCard.number,
+          suit: randomCard.suit || '',
+          number: randomCard.number || 0,
           },
           answer: randomAnswer === 'yes' ? 'ДА' : 'НЕТ',
           interpretation: `На основе карты "${randomCard.name}" ответ: ${randomAnswer === 'yes' ? 'Да' : 'Нет'}. ${randomCard.advice}`,
@@ -133,8 +187,8 @@ export function YesNoScreen({ onBack }: YesNoScreenProps) {
           meaning: randomCard.meaning,
           advice: randomCard.advice,
           isMajorArcana: randomCard.isMajorArcana,
-          suit: randomCard.suit,
-          number: randomCard.number,
+          suit: randomCard.suit || '',
+          number: randomCard.number || 0,
         },
         answer: randomAnswer === 'yes' ? 'ДА' : 'НЕТ',
         interpretation: `На основе карты "${randomCard.name}" ответ: ${randomAnswer === 'yes' ? 'Да' : 'Нет'}. ${randomCard.advice}`,
@@ -164,13 +218,7 @@ export function YesNoScreen({ onBack }: YesNoScreenProps) {
       console.log('Card data:', result.card);
       
       // Используем API для получения ответа от ChatGPT
-      const response = await apiService.getClarifyingAnswer(
-        questionText,
-        result.card,
-        result.interpretation,
-        'yesno',
-        result.readingId // Передаем ID текущего расклада
-      );
+      const response = await apiService.getClarifyingAnswer(questionText, result.card.name);
 
       console.log('API Response:', response);
       console.log('Response data:', response.data);

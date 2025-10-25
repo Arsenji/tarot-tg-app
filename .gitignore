@@ -1,10 +1,27 @@
+# Environment files (CRITICAL: Never commit these!)
 .env
+.env.local
+.env.development
+.env.production
+.env.staging
+.env.test
+docker.env
+docker.env.local
+
+# Dependencies
 node_modules/
+
+# Build outputs
 dist/
 logs/
 build/
 out/
 .next/
+
+# Docker volumes and data
+docker-data/
+mongodb-data/
+redis-data/
 
 # Compiled files
 *.js
