@@ -83,23 +83,23 @@ export const rateLimit = (options: RateLimitOptions) => {
         res.json = function(data: any) {
           if (options.skipSuccessfulRequests && res.statusCode < 400) {
             // Уменьшаем счетчик для успешных запросов
-            cache.incr(cacheKey, -1).catch(() => {});
+            cache.decr(cacheKey, 1).catch(() => {});
           }
           return originalJson.call(this, data);
         };
 
         res.send = function(data: any) {
           if (options.skipSuccessfulRequests && res.statusCode < 400) {
-            cache.incr(cacheKey, -1).catch(() => {});
+            cache.decr(cacheKey, 1).catch(() => {});
           }
           return originalSend.call(this, data);
         };
 
-        res.end = function(data?: any) {
+        res.end = function(data?: any, encoding?: any) {
           if (options.skipSuccessfulRequests && res.statusCode < 400) {
-            cache.incr(cacheKey, -1).catch(() => {});
+            cache.decr(cacheKey, 1).catch(() => {});
           }
-          return originalEnd.call(this, data);
+          return originalEnd.call(this, data, encoding);
         };
       }
 

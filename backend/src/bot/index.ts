@@ -175,7 +175,7 @@ const initializeBot = () => {
         return;
       }
 
-      const subscriptionInfo = checkSubscriptionStatus(user);
+      const subscriptionInfo = await checkSubscriptionStatus(user.telegramId);
 
       let message = '🎉 Отлично! Теперь у вас есть доступ к веб-приложению.\n\n';
       
@@ -210,7 +210,7 @@ const initializeBot = () => {
         return;
       }
 
-      const subscriptionInfo = checkSubscriptionStatus(user);
+      const subscriptionInfo = await checkSubscriptionStatus(user.telegramId);
 
       if (subscriptionInfo.hasSubscription) {
         await ctx.reply(
@@ -227,7 +227,7 @@ const initializeBot = () => {
         message += `📦 ${plan.name}\n`;
         message += `💰 ${plan.price}₽\n`;
         message += `📅 ${plan.duration} дней\n`;
-        message += `📝 ${plan.description}\n\n`;
+        message += `📝 ${plan.name}\n\n`;
       });
 
       message += 'Нажмите на тариф для покупки:';
@@ -268,19 +268,18 @@ const initializeBot = () => {
         const now = new Date();
         let expiryDate: Date;
         
-        if (user.subscriptionStatus === 1 && user.subscriptionExpiry && user.subscriptionExpiry > now) {
+        if (user.subscriptionStatus === 1 && user.subscriptionExpiresAt && user.subscriptionExpiresAt > now) {
           // Если подписка активна - продлеваем (суммируем сроки)
-          expiryDate = new Date(user.subscriptionExpiry.getTime() + (plan.duration * 24 * 60 * 60 * 1000));
+          expiryDate = new Date(user.subscriptionExpiresAt.getTime() + (plan.duration * 24 * 60 * 60 * 1000));
         } else {
           // Если подписки нет или она истекла - создаем новую
           expiryDate = new Date(now.getTime() + (plan.duration * 24 * 60 * 60 * 1000));
-          user.subscriptionActivatedAt = now;
         }
 
-        const isRenewal = user.subscriptionStatus === 1 && user.subscriptionExpiry && user.subscriptionExpiry > now;
+        const isRenewal = user.subscriptionStatus === 1 && user.subscriptionExpiresAt && user.subscriptionExpiresAt > now;
         
         user.subscriptionStatus = 1;
-        user.subscriptionExpiry = expiryDate;
+        user.subscriptionExpiresAt = expiryDate;
         await user.save();
         
         await ctx.answerCbQuery(isRenewal ? '✅ Подписка продлена! (Тест)' : '✅ Подписка активирована! (Тест)');
@@ -310,12 +309,15 @@ const initializeBot = () => {
       try {
         const returnUrl = `${process.env.FRONTEND_URL}/payment/success`;
         const payment = await yooKassa.createPayment(
-          plan.price,
-          `Подписка "${plan.name}" для пользователя ${userId}`,
           userId.toString(),
           planType,
           returnUrl
         );
+
+        if (!payment) {
+          await ctx.answerCbQuery('Ошибка создания платежа');
+          return;
+        }
 
         await ctx.answerCbQuery('Перенаправляем на оплату...');
         await ctx.editMessageText(
@@ -367,7 +369,7 @@ const initializeBot = () => {
         return;
       }
 
-      const subscriptionInfo = checkSubscriptionStatus(user);
+      const subscriptionInfo = await checkSubscriptionStatus(user.telegramId);
 
       if (!subscriptionInfo.hasSubscription) {
         await ctx.reply(
@@ -383,11 +385,11 @@ const initializeBot = () => {
       // Правильный расчет даты активации и дней
       const now = new Date();
       
-      // Используем сохраненную дату активации или текущую дату
-      const activationDate = user.subscriptionActivatedAt || now;
+      // Используем текущую дату как дату активации
+      const activationDate = now;
       
-      const daysLeft = user.subscriptionExpiry ? 
-        Math.max(0, Math.ceil((user.subscriptionExpiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))) : 
+      const daysLeft = user.subscriptionExpiresAt ? 
+        Math.max(0, Math.ceil((user.subscriptionExpiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))) : 
         0;
 
       const message = 
@@ -395,7 +397,7 @@ const initializeBot = () => {
         `✅ Статус: Активна\n` +
         `📅 Дата активации: ${activationDate.toLocaleDateString('ru-RU')}\n` +
         `⏰ Осталось дней: ${daysLeft}\n` +
-        `📆 Действует до: ${user.subscriptionExpiry?.toLocaleDateString('ru-RU')}\n\n` +
+        `📆 Действует до: ${user.subscriptionExpiresAt?.toLocaleDateString('ru-RU')}\n\n` +
         `🎉 Полный доступ ко всем функциям!`;
 
       await ctx.reply(

@@ -1,11 +1,11 @@
 import { motion } from 'motion/react';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { FloatingCard } from '@/components/FloatingCard';
 import { ArrowLeft, Heart, Briefcase, Star, Sparkles } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import { ImageWithFallback } from '@/components/figma/ImageWithFallback';
-import { apiService, CardData } from '@/services/api';
+import { apiService } from '@/services/api';
 import { TarotCard } from '@/types/tarot';
 import { TarotLoader } from './OneCardScreen';
 import { formatInterpretationText } from '@/utils/textFormatting';
@@ -186,7 +186,13 @@ export function ThreeCardsScreen({ onBack }: ThreeCardsScreenProps) {
       console.log('Cards data:', apiCards);
       
       // Используем API для получения ответа от ChatGPT
-      const response = await apiService.getClarifyingAnswer(questionText, apiCards[0].name);
+      const response = await apiService.getClarifyingAnswer(
+        questionText,
+        apiCards[0], // Используем первую карту как основную
+        apiInterpretation,
+        selectedCategory || 'personal',
+        currentReadingId || undefined // Передаем ID текущего расклада
+      );
 
       console.log('API Response:', response);
       console.log('Response data:', response.data);
@@ -248,18 +254,7 @@ export function ThreeCardsScreen({ onBack }: ThreeCardsScreenProps) {
       const response = await apiService.getThreeCardsReading(selectedCategory, userQuestion);
       
       if (response.success && response.data) {
-        // Преобразуем CardData в TarotCard
-        const tarotCards: TarotCard[] = response.data.cards.map((card: CardData) => ({
-          name: card.name,
-          image: card.image,
-          keywords: card.keywords,
-          advice: card.advice,
-          meaning: card.meaning,
-          isMajorArcana: card.isMajorArcana,
-          suit: card.suit || '',
-          number: card.number || 0
-        }));
-        setApiCards(tarotCards);
+        setApiCards(response.data.cards);
         setApiInterpretation(response.data.interpretation);
         setCurrentReadingId(response.data.readingId);
         

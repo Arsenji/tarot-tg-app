@@ -1,19 +1,6 @@
 import { cache, historyCache, dailyAdviceCache, getCurrentDate } from '@/utils/cache';
 import { getValidAuthToken } from '@/utils/auth';
 
-export interface CardData {
-  id: string;
-  name: string;
-  image: string;
-  keywords: string;
-  advice: string;
-  meaning: string;
-  isMajorArcana: boolean;
-  suit?: string;
-  number?: number;
-  reversed?: boolean;
-}
-
 export interface ApiResponse<T> {
   success: boolean;
   data: T;
@@ -155,7 +142,7 @@ class ApiService {
     }
   }
 
-  async getDailyAdvice(): Promise<ApiResponse<DailyAdviceResponse>> {
+  async getDailyAdvice(): Promise<ApiResponse<String>> {
     // Отключаем кэширование для получения разных карт каждый раз
     const response = await this.request<DailyAdviceResponse>('/api/tarot/daily-advice', {
       method: 'POST',
@@ -211,24 +198,6 @@ class ApiService {
     return this.request<any>('/api/subscription/generate-payment', {
       method: 'POST',
       body: JSON.stringify({ spreadType }),
-    });
-  }
-
-  async getCardDetailedDescription(cardName: string): Promise<ApiResponse<any>> {
-    return this.request<any>(`/api/tarot/card/${cardName}/description`);
-  }
-
-  async getYesNoAnswer(question: string): Promise<ApiResponse<YesNoResult>> {
-    return this.request<YesNoResult>('/api/tarot/yes-no', {
-      method: 'POST',
-      body: JSON.stringify({ question }),
-    });
-  }
-
-  async getClarifyingAnswer(question: string, cardName: string): Promise<ApiResponse<any>> {
-    return this.request<any>('/api/tarot/clarifying', {
-      method: 'POST',
-      body: JSON.stringify({ question, cardName }),
     });
   }
 }

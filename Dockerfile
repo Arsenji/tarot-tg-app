@@ -4,20 +4,20 @@ FROM node:20-alpine
 # Устанавливаем рабочую директорию
 WORKDIR /app
 
-# Копируем package.json и lockfile для бэкенда
-COPY backend/package*.json ./
+# Копируем package.json и package-lock.json
+COPY package*.json ./
 
-# Устанавливаем зависимости (включая dev для сборки TypeScript)
+# Устанавливаем зависимости (включая dev для сборки)
 RUN npm ci
 
-# Копируем исходный код бэкенда и конфигурацию TypeScript
-COPY backend/src ./src
-COPY backend/tsconfig.json ./tsconfig.json
+# Принудительно устанавливаем типы Node.js
+RUN npm install --save-dev @types/node
 
-# Собираем TypeScript
-RUN npm run build
+# Копируем исходный код
+COPY . .
 
-# Отладка: проверяем что собралось
+# Отладка: проверяем что скопировалось
+RUN echo "=== Структура /app ===" && ls -la /app/
 RUN echo "=== Содержимое /app/dist/ ===" && ls -la /app/dist/ || echo "dist not found"
 RUN echo "=== Проверка /app/dist/index.js ===" && ls -la /app/dist/index.js || echo "index.js not found"
 
@@ -35,5 +35,6 @@ USER backend
 # Открываем порт
 EXPOSE 3001
 
-# Команда запуска
-CMD ["node", "dist/index.js"]
+# Команда запуска (используем корневой index.js)
+WORKDIR /app
+CMD ["node", "index.js"]

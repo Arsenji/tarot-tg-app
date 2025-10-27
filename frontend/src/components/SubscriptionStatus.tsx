@@ -2,7 +2,7 @@
 
 import { motion } from 'motion/react';
 import { Crown, Star, Calendar, Sparkles, Clock } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/components/ui/button';
 
 interface SubscriptionStatusProps {
   subscriptionInfo?: {
@@ -13,15 +13,13 @@ interface SubscriptionStatusProps {
     canUseDailyAdvice: boolean;
     historyLimit: number;
   };
-  onOpenModal?: () => void;
-  isLoading?: boolean;
+  onUpgrade?: () => void;
   compact?: boolean;
 }
 
 export function SubscriptionStatus({ 
   subscriptionInfo, 
-  onOpenModal, 
-  isLoading = false,
+  onUpgrade, 
   compact = false 
 }: SubscriptionStatusProps) {
   if (!subscriptionInfo) return null;
@@ -68,9 +66,10 @@ export function SubscriptionStatus({
         <span className={`text-sm font-medium ${getStatusColor()}`}>
           {getStatusText()}
         </span>
-        {!subscriptionInfo.hasSubscription && onOpenModal && (
+        {!subscriptionInfo.hasSubscription && onUpgrade && (
           <Button
-              onClick={onOpenModal}
+            onClick={onUpgrade}
+            size="sm"
             className="ml-2 px-3 py-1 bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 border border-amber-400/30 rounded-lg text-xs"
           >
             <Crown className="w-3 h-3 mr-1" />
@@ -104,9 +103,9 @@ export function SubscriptionStatus({
             </p>
           </div>
         </div>
-        {!subscriptionInfo.hasSubscription && onOpenModal && (
+        {!subscriptionInfo.hasSubscription && onUpgrade && (
           <Button
-              onClick={onOpenModal}
+            onClick={onUpgrade}
             className="px-4 py-2 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-700 hover:to-amber-600 text-white font-medium rounded-xl transition-all duration-300"
           >
             <Crown className="w-4 h-4 mr-2" />

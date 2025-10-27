@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tarot Admin Panel</title>
+  <link href="static/css/main.2297addb.css" rel="stylesheet">
+</head>
+<body>
+  <div id="root">
+    <div style="padding: 20px; text-align: center; background: #1a1a1a; color: #fff; min-height: 100vh;">
+      <h1>🚀 Tarot Admin Panel</h1>
+      <div id="content">
+        <div id="login-form" style="display: block;">
+          <h2>Login</h2>
+          <input type="text" id="username" placeholder="Username" style="padding: 10px; margin: 10px; width: 300px; border-radius: 5px;">
+          <br>
+          <input type="password" id="password" placeholder="Password" style="padding: 10px; margin: 10px; width: 300px; border-radius: 5px;">
+          <br>
+          <button onclick="login()" style="padding: 12px 24px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; margin: 10px;">Login</button>
+        </div>
+        <div id="admin-dashboard" style="display: none;">
+          <h2>📊 Admin Dashboard</h2>
+          <p>✅ Successfully logged in as admin!</p>
+          <button onclick="logout()" style="padding: 10px 20px; background: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer; margin: 10px;">Logout</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="router-fix.js"></script>
+  <script src="api-fix.js"></script>
+  <script>
+    function login() {
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+      
+      if (username === 'admin' && password === 'admin123') {
+        document.getElementById('login-form').style.display = 'none';
+        document.getElementById('admin-dashboard').style.display = 'block';
+      } else {
+        alert('Invalid credentials');
+      }
+    }
+    
+    function logout() {
+      document.getElementById('login-form').style.display = 'block';
+      document.getElementById('admin-dashboard').style.display = 'none';
+      document.getElementById('username').value = '';
+      document.getElementById('password').value = '';
+    }
+  </script>
+  <script defer="defer" src="static/js/main.b5b292e3.js"></script>
+</body>
+</html>

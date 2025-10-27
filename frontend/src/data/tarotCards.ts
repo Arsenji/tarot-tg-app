@@ -210,6 +210,3 @@ export const tarotCards: TarotCard[] = [
     number: 21
   }
 ];
-
-// Экспорт всех карт для использования в компонентах
-export const allCards = tarotCards;

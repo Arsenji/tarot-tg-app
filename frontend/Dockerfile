@@ -1,45 +1,44 @@
-# Frontend Dockerfile для Tarot Telegram App
-FROM node:20-alpine AS base
+# Dockerfile for Frontend
+FROM node:18-alpine AS builder
 
-# Устанавливаем рабочую директорию
+# Set working directory
 WORKDIR /app
 
-# Копируем package.json и package-lock.json
+# Copy package files
 COPY package*.json ./
 
-# Устанавливаем зависимости
+# Install dependencies
 RUN npm ci
 
-# Копируем исходный код
+# Copy source code
 COPY . .
 
-# Собираем приложение
+# Build the application
 RUN npm run build
 
 # Production stage
-FROM node:20-alpine AS production
+FROM node:18-alpine AS production
 
-WORKDIR /app
-
-# Копируем package.json и устанавливаем только production зависимости
-COPY package*.json ./
-RUN npm ci --only=production
-
-# Копируем собранное приложение
-COPY --from=base /app/.next ./.next
-COPY --from=base /app/public ./public
-COPY --from=base /app/next.config.js ./
-
-# Создаём пользователя для безопасности
+# Create app user
 RUN addgroup -g 1001 -S nodejs
 RUN adduser -S nextjs -u 1001
 
-# Меняем владельца файлов
-RUN chown -R nextjs:nodejs /app
+# Set working directory
+WORKDIR /app
+
+# Copy built application
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/package*.json ./
+
+# Install only production dependencies
+RUN npm ci --only=production && npm cache clean --force
+
+# Switch to non-root user
 USER nextjs
 
-# Открываем порт
+# Expose port
 EXPOSE 3000
 
-# Команда запуска
+# Start the application
 CMD ["npm", "start"]

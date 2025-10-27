@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>🚀 Tarot Admin Panel</title>
+  <style>
+    body{font-family:Arial;background:#1a1a1a;color:#fff;text-align:center;padding:50px;}
+    .login-form{border:1px solid #333;border-radius:8px;padding:20px;max-width:400px;margin:0 auto;background:#222;}
+    input,button{padding:10px;margin:10px;border-radius:5px;border:1px solid #555;background:#333;color:#fff;width:100%;}
+    button{background:#007bff;cursor:pointer;border:none;}
+    .loading{color:#ffd700;}
+  </style>
+</head>
+<body>
+  <h1>🚀 Tarot Admin Panel</h1>
+
+  <div id="status">Loading...</div>
+
+  <script>
+    // Redirect to main app
+    setTimeout(() => {
+      document.getElementById('status').innerHTML = '<div class="loading">↗️ Redirecting to main application...</div>';
+      window.location.href = 'index.html';
+    }, 2000);
+  </script>
+</body>
+</html>

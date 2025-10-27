@@ -1,5 +1,5 @@
 import { Redis } from 'ioredis';
-import logger from './logger';
+import logger from '../utils/logger';
 
 interface CacheConfig {
   host: string;
@@ -34,7 +34,6 @@ class CacheService {
         port: this.config.port,
         password: this.config.password,
         db: this.config.db,
-        retryDelayOnFailover: this.config.retryDelayOnFailover,
         maxRetriesPerRequest: this.config.maxRetriesPerRequest,
         lazyConnect: true
       });
@@ -186,6 +185,20 @@ class CacheService {
       return await this.redis!.incrby(key, by);
     } catch (error) {
       logger.error('Cache incr error:', error);
+      return null;
+    }
+  }
+
+  // Уменьшение значения
+  async decr(key: string, by: number = 1): Promise<number | null> {
+    if (!this.isAvailable()) {
+      return null;
+    }
+
+    try {
+      return await this.redis!.decrby(key, by);
+    } catch (error) {
+      logger.error('Cache decr error:', error);
       return null;
     }
   }
