@@ -17,8 +17,7 @@ const UserSchema = new Schema<IUser>({
   telegramId: {
     type: Number,
     required: true,
-    unique: true,
-    index: true
+    unique: true
   },
   firstName: {
     type: String,

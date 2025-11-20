@@ -19,19 +19,16 @@ export interface ITarotReading extends Document {
 const TarotReadingSchema = new Schema<ITarotReading>({
   userId: {
     type: String,
-    required: true,
-    index: true
+    required: true
   },
   telegramId: {
     type: Number,
-    required: true,
-    index: true
+    required: true
   },
   readingType: {
     type: String,
     required: true,
-    enum: ['single', 'three', 'yesno'],
-    index: true
+    enum: ['single', 'three', 'yesno']
   },
   cards: [{
     name: {

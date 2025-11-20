@@ -16,13 +16,11 @@ export interface ISupportMessage extends Document {
 const SupportMessageSchema = new Schema<ISupportMessage>({
   userId: {
     type: String,
-    required: true,
-    index: true
+    required: true
   },
   telegramId: {
     type: Number,
-    required: true,
-    index: true
+    required: true
   },
   userName: {
     type: String,
@@ -42,8 +40,7 @@ const SupportMessageSchema = new Schema<ISupportMessage>({
   status: {
     type: String,
     enum: ['new', 'in_progress', 'resolved'],
-    default: 'new',
-    index: true
+    default: 'new'
   },
   reply: {
     type: String,
