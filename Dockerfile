@@ -17,6 +17,9 @@ RUN npm install --save-dev @types/node
 # Копируем исходный код backend
 COPY backend/ .
 
+# Собираем TypeScript проект
+RUN npm run build
+
 # Отладка: проверяем что скопировалось
 RUN echo "=== Структура /app ===" && ls -la /app/
 RUN echo "=== Содержимое /app/dist/ ===" && ls -la /app/dist/ || echo "dist not found"
@@ -36,6 +39,6 @@ USER backend
 # Открываем порт
 EXPOSE 3001
 
-# Команда запуска (используем корневой index.js)
+# Команда запуска (используем скомпилированный файл из dist)
 WORKDIR /app
-CMD ["node", "index.js"]
+CMD ["node", "dist/index.js"]
