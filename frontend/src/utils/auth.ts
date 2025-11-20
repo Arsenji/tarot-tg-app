@@ -25,6 +25,7 @@ export const getAuthToken = async (): Promise<string | null> => {
       
       const authResponse = await fetch(getApiEndpoint('/auth/telegram'), {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
         },

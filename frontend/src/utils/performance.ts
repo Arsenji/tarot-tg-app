@@ -285,6 +285,7 @@ class PerformanceMonitor {
     try {
       await fetch('/api/performance/report', {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
         },

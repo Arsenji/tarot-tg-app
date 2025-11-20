@@ -98,6 +98,7 @@ class ApiService {
       const token = await getValidAuthToken();
       
       const response = await fetch(`${this.baseUrl}${endpoint}`, {
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
           ...(token && { 'Authorization': `Bearer ${token}` }),

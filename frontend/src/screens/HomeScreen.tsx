@@ -84,6 +84,7 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
             
             const authResponse = await fetch('/api/auth/telegram', {
               method: 'POST',
+              credentials: 'include',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ initData })
             });
@@ -104,11 +105,15 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
 
       const token = await getAuthToken();
       
+      const headers: any = {};
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+
       const response = await fetch(getApiEndpoint('/tarot/subscription-status'), {
         method: 'GET',
-        headers: {
-          'Authorization': token ? `Bearer ${token}` : '',
-        },
+        credentials: 'include',
+        headers,
       });
       
       const data = await response.json();

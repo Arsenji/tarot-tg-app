@@ -8,7 +8,8 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies
-RUN npm ci
+# Используем npm install, если package-lock.json отсутствует
+RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
 # Copy source code
 COPY . .
@@ -32,7 +33,8 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/package*.json ./
 
 # Install only production dependencies
-RUN npm ci --only=production && npm cache clean --force
+# Используем npm install, если package-lock.json отсутствует
+RUN if [ -f package-lock.json ]; then npm ci --only=production; else npm install --only=production; fi && npm cache clean --force
 
 # Switch to non-root user
 USER nextjs

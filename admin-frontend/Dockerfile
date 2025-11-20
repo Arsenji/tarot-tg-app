@@ -4,11 +4,12 @@ FROM node:20-alpine AS base
 # Устанавливаем рабочую директорию
 WORKDIR /app
 
-# Копируем package.json и package-lock.json
+# Копируем package.json и package-lock.json (если есть)
 COPY package*.json ./
 
 # Устанавливаем зависимости
-RUN npm ci
+# Используем npm install, если package-lock.json отсутствует
+RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
 # Копируем исходный код
 COPY . .

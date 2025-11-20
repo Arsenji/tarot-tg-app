@@ -87,6 +87,7 @@ function PaymentSuccessContent() {
 
         const response = await fetch(endpoint, {
           method: 'GET',
+          credentials: 'include',
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'

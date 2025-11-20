@@ -1,0 +1,27 @@
+{
+  "name": "tarot-tg-app",
+  "version": "1.0.0",
+  "description": "Tarot Telegram App - Monorepo",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:test": "concurrently \"npm run dev:test:backend\" \"npm run dev:test:frontend\"",
+    "dev:test:backend": "cd backend && NODE_ENV=test npx dotenv-cli -e ../.env.test -- ts-node src/index.ts",
+    "dev:test:frontend": "cd frontend && NODE_ENV=test NEXT_PUBLIC_API_URL=http://localhost:4000 npm run dev",
+    "build": "npm run build:backend && npm run build:frontend",
+    "build:backend": "cd backend && npm run build",
+    "build:frontend": "cd frontend && npm run build",
+    "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "dotenv-cli": "^7.3.0"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  }
+}
+

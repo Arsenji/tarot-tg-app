@@ -4,17 +4,18 @@ FROM node:20-alpine
 # Устанавливаем рабочую директорию
 WORKDIR /app
 
-# Копируем package.json и package-lock.json
-COPY package*.json ./
+# Копируем package.json и package-lock.json из backend (если есть)
+COPY backend/package*.json ./
 
 # Устанавливаем зависимости (включая dev для сборки)
-RUN npm ci
+# Используем npm install, если package-lock.json отсутствует
+RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
 # Принудительно устанавливаем типы Node.js
 RUN npm install --save-dev @types/node
 
-# Копируем исходный код
-COPY . .
+# Копируем исходный код backend
+COPY backend/ .
 
 # Отладка: проверяем что скопировалось
 RUN echo "=== Структура /app ===" && ls -la /app/

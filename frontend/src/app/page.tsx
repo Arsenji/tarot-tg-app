@@ -67,6 +67,7 @@ export default function Home() {
             
             const authResponse = await fetch('/api/auth/telegram', {
               method: 'POST',
+              credentials: 'include',
               headers: {
                 'Content-Type': 'application/json',
               },
@@ -93,6 +94,7 @@ export default function Home() {
       
       const response = await fetch(getApiEndpoint('/tarot/subscription-status'), {
         method: 'GET',
+        credentials: 'include',
         headers: {
           'Authorization': token ? `Bearer ${token}` : '',
         },
