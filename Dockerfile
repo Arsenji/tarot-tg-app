@@ -14,11 +14,17 @@ RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 # Принудительно устанавливаем типы Node.js
 RUN npm install --save-dev @types/node
 
+# Копируем tsconfig.json для сборки
+COPY backend/tsconfig.json ./
+
 # Копируем исходный код backend
-COPY backend/ .
+COPY backend/src ./src
 
 # Собираем TypeScript проект
 RUN npm run build
+
+# Проверяем что сборка прошла успешно
+RUN test -f dist/index.js || (echo "ERROR: dist/index.js not found after build!" && ls -la dist/ && exit 1)
 
 # Отладка: проверяем что скопировалось
 RUN echo "=== Структура /app ===" && ls -la /app/
@@ -27,6 +33,9 @@ RUN echo "=== Проверка /app/dist/index.js ===" && ls -la /app/dist/index
 
 # Удаляем dev-зависимости для оптимизации размера образа
 RUN npm prune --production
+
+# Проверяем что dist/index.js все еще существует после prune
+RUN test -f dist/index.js || (echo "ERROR: dist/index.js was deleted!" && exit 1)
 
 # Создаём пользователя для безопасности
 RUN addgroup -g 1001 -S nodejs
