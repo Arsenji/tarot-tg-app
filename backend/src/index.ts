@@ -63,9 +63,13 @@ app.get('/health', (req, res) => {
 });
 
 // API маршруты
-app.use('/api/tarot', require('./routes/tarot').default);
-app.use('/api/subscription', require('./routes/subscription').default);
-app.use('/api/auth', require('./routes/auth').default);
+import tarotRoutes from './routes/tarot';
+import subscriptionRoutes from './routes/subscription';
+import authRoutes from './routes/auth';
+
+app.use('/api/tarot', tarotRoutes);
+app.use('/api/subscription', subscriptionRoutes);
+app.use('/api/auth', authRoutes);
 
 // Обработка ошибок
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

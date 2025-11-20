@@ -14,13 +14,11 @@ export interface IReview extends Document {
 const ReviewSchema = new Schema<IReview>({
   userId: {
     type: String,
-    required: true,
-    index: true
+    required: true
   },
   telegramId: {
     type: Number,
-    required: true,
-    index: true
+    required: true
   },
   userName: {
     type: String,

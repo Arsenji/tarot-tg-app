@@ -1,13 +1,53 @@
 import mongoose from 'mongoose';
 import logger from './logger';
 
+/**
+ * Очищает MongoDB URI от устаревших параметров, которые не поддерживаются в MongoDB 4.x+
+ */
+function cleanMongoUri(uri: string): string {
+  try {
+    const url = new URL(uri);
+    
+    // Удаляем устаревшие параметры из query string
+    const paramsToRemove = [
+      'buffermaxentries',
+      'bufferMaxEntries',
+      'bufferCommands',
+      'useNewUrlParser',
+      'useUnifiedTopology',
+      'useFindAndModify'
+    ];
+    
+    paramsToRemove.forEach(param => {
+      url.searchParams.delete(param);
+    });
+    
+    return url.toString();
+  } catch (error) {
+    // Если URI не является валидным URL (например, mongodb+srv://), возвращаем как есть
+    // но пытаемся удалить параметры через regex
+    return uri
+      .replace(/[?&]buffermaxentries=\d+/gi, '')
+      .replace(/[?&]bufferMaxEntries=\d+/gi, '')
+      .replace(/[?&]bufferCommands=(true|false)/gi, '')
+      .replace(/[?&]useNewUrlParser=(true|false)/gi, '')
+      .replace(/[?&]useUnifiedTopology=(true|false)/gi, '')
+      .replace(/[?&]useFindAndModify=(true|false)/gi, '')
+      .replace(/[?&]$/, '') // Удаляем trailing & или ?
+      .replace(/\?$/, ''); // Удаляем trailing ?
+  }
+}
+
 export const connectDB = async (): Promise<void> => {
   try {
-    const mongoUri = process.env.MONGODB_URI;
+    let mongoUri = process.env.MONGODB_URI;
     
     if (!mongoUri) {
       throw new Error('MONGODB_URI environment variable is not set');
     }
+
+    // Очищаем URI от устаревших параметров
+    mongoUri = cleanMongoUri(mongoUri);
 
     const options = {
       maxPoolSize: 10, // Maintain up to 10 socket connections
