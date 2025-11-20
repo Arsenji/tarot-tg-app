@@ -43,7 +43,7 @@ class CacheService {
         this.isConnected = true;
       });
 
-      this.redis.on('error', (error) => {
+      this.redis.on('error', (error: Error) => {
         logger.error('❌ Redis connection error:', error);
         this.isConnected = false;
       });
