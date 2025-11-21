@@ -102,9 +102,7 @@ const startServer = async () => {
     
     // Запускаем сервер
     app.listen(PORT, '0.0.0.0', () => {
-      logger.info(`🚀 Server running on port ${PORT}`);
-      logger.info(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-      logger.info(`🔗 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:3000'}`);
+      console.log(`🚀 Server running on port ${PORT}`);
     });
   } catch (error) {
     logger.error('Failed to start server', { error });

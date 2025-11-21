@@ -1,6 +1,4 @@
 import { Telegraf, Context, Markup } from 'telegraf';
-import mongoose from 'mongoose';
-import { connectDB } from '../utils/database';
 import { User } from '../models/User';
 import { SupportMessage } from '../models/SupportMessage';
 import { Review } from '../models/Review';
@@ -609,20 +607,72 @@ const startBot = async () => {
     // Инициализируем обработчики
     initializeBot();
 
-    await connectDB();
-    
     // Проверяем, не запущен ли бот уже перед launch
     if (isBotRunning) {
       logger.warn('Bot is already running, skipping launch');
       return;
     }
-    
-    // Добавляем задержку перед запуском для предотвращения конфликтов
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    await bot.launch();
-    isBotRunning = true;
-    logger.info('🤖 Telegram Bot started successfully');
+
+    // Проверяем режим работы бота (webhook или getUpdates)
+    const useWebhook = process.env.TELEGRAM_USE_WEBHOOK === 'true';
+    const webhookUrl = process.env.TELEGRAM_WEBHOOK_URL;
+
+    if (useWebhook && webhookUrl) {
+      // Режим webhook - отключаем getUpdates и устанавливаем webhook
+      logger.info('Starting bot in webhook mode');
+      
+      try {
+        // Удаляем существующий webhook, если есть
+        await bot.telegram.deleteWebhook({ drop_pending_updates: true });
+        logger.info('Deleted existing webhook');
+        
+        // Устанавливаем новый webhook
+        await bot.telegram.setWebhook(webhookUrl, { drop_pending_updates: true });
+        logger.info(`Webhook set to: ${webhookUrl}`);
+        
+        isBotRunning = true;
+        logger.info('🤖 Telegram Bot started in webhook mode');
+      } catch (error) {
+        logger.error('Failed to set webhook', { error });
+        throw error;
+      }
+    } else {
+      // Режим getUpdates (long polling) - отключаем webhook и запускаем polling
+      logger.info('Starting bot in getUpdates (long polling) mode');
+      
+      try {
+        // Удаляем webhook, если он был установлен
+        await bot.telegram.deleteWebhook({ drop_pending_updates: true });
+        logger.info('Deleted webhook to use getUpdates mode');
+        
+        // Добавляем задержку перед запуском для предотвращения конфликтов
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Запускаем long polling
+        await bot.launch();
+        isBotRunning = true;
+        logger.info('🤖 Telegram Bot started in getUpdates mode');
+      } catch (error: any) {
+        // Проверяем на конфликт 409
+        if (error?.response?.error_code === 409) {
+          logger.warn('Bot conflict detected - another instance is using getUpdates');
+          logger.warn('Trying to delete webhook and retry...');
+          
+          try {
+            await bot.telegram.deleteWebhook({ drop_pending_updates: true });
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            await bot.launch();
+            isBotRunning = true;
+            logger.info('🤖 Telegram Bot started successfully after resolving conflict');
+          } catch (retryError) {
+            logger.error('Failed to start bot after conflict resolution', { error: retryError });
+            throw retryError;
+          }
+        } else {
+          throw error;
+        }
+      }
+    }
     
     // Graceful stop
     process.once('SIGINT', () => {
@@ -637,18 +687,15 @@ const startBot = async () => {
         isBotRunning = false;
       }
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to start bot', { error });
     isBotRunning = false;
     
-    // Если это ошибка конфликта, не завершаем процесс
-    if (error && typeof error === 'object' && 'response' in error) {
-      const telegramError = error as any;
-      if (telegramError.response?.error_code === 409) {
-        logger.warn('Bot conflict detected - another instance is running');
-        logger.warn('Continuing without Telegram Bot - API will work normally');
-        return;
-      }
+    // Если это ошибка конфликта 409, логируем и продолжаем без бота
+    if (error?.response?.error_code === 409) {
+      logger.warn('Bot conflict detected - another instance is running');
+      logger.warn('Continuing without Telegram Bot - API will work normally');
+      return;
     }
     
     // Для других ошибок тоже не завершаем процесс
