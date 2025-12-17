@@ -97,13 +97,16 @@ const startServer = async () => {
     // Подключаемся к базе данных
     await connectDB();
     
-    // Запускаем Telegram бота
-    await startBot();
-    
-    // Запускаем сервер
+    // КРИТИЧНО: Запускаем HTTP сервер ПЕРЕД ботом
+    // app.listen() - неблокирующая операция, сервер запустится и продолжит выполнение
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 Server running on port ${PORT}`);
+      logger.info(`HTTP server started on port ${PORT}`, { port: PORT, environment: process.env.NODE_ENV });
     });
+    
+    // Запускаем Telegram бота ПОСЛЕ сервера
+    // bot.launch() - блокирующая операция (long polling), но сервер уже запущен
+    await startBot();
   } catch (error) {
     logger.error('Failed to start server', { error });
     process.exit(1);
