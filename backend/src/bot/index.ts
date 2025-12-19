@@ -138,6 +138,69 @@ const initializeBot = () => {
     }
   });
 
+  // Команда /help
+  bot.command('help', async (ctx: Context) => {
+    try {
+      const userId = ctx.from?.id;
+      if (!userId) return;
+
+      userStates.set(userId, { waitingForHelp: true });
+
+      await ctx.reply(
+        '🆘 Помощь\n\n' +
+        'Пожалуйста, поделитесь своей проблемой и опишите её.\n' +
+        'В кратчайшие сроки мы вернёмся к вам с помощью!\n\n' +
+        'Напишите ваше сообщение:',
+        getBackKeyboard()
+      );
+    } catch (error) {
+      logger.error('Error in /help command', { error, userId: ctx.from?.id });
+      await ctx.reply('Произошла ошибка. Попробуйте позже.');
+    }
+  });
+
+  // Команда /subscription
+  bot.command('subscription', async (ctx: Context) => {
+    try {
+      const userId = ctx.from?.id;
+      if (!userId) return;
+
+      const user = await User.findOne({ telegramId: userId });
+      if (!user) {
+        await ctx.reply('Пользователь не найден. Используйте /start для регистрации.');
+        return;
+      }
+
+      const subscriptionStatus = await checkSubscriptionStatus(userId);
+      
+      if (subscriptionStatus.hasSubscription && !subscriptionStatus.isExpired) {
+        const expiresAt = subscriptionStatus.expiresAt 
+          ? new Date(subscriptionStatus.expiresAt).toLocaleDateString('ru-RU')
+          : 'Неизвестно';
+        
+        await ctx.reply(
+          `✅ У вас активная подписка!\n\n` +
+          `📅 Действует до: ${expiresAt}\n\n` +
+          `💎 Вы можете использовать все функции бота без ограничений.`,
+          getMainKeyboard()
+        );
+      } else {
+        await ctx.reply(
+          `❌ У вас нет активной подписки.\n\n` +
+          `🎁 В бесплатном доступе:\n` +
+          `🃏 «Совет дня» — 1 раз каждый день\n` +
+          `❓ 1 вопрос «Да / Нет»\n` +
+          `🔮 1 расклад на 3 карты\n\n` +
+          `💳 Нажмите «Купить подписку» для получения полного доступа.`,
+          getMainKeyboard()
+        );
+      }
+    } catch (error) {
+      logger.error('Error in /subscription command', { error, userId: ctx.from?.id });
+      await ctx.reply('Произошла ошибка. Попробуйте позже.');
+    }
+  });
+
   // Обработка кнопки "Начать"
   bot.hears('Начать', async (ctx: Context) => {
     try {
@@ -606,6 +669,19 @@ const startBot = async () => {
 
     // Инициализируем обработчики
     initializeBot();
+
+    // Регистрируем команды бота (чтобы они отображались в меню)
+    try {
+      await bot.telegram.setMyCommands([
+        { command: 'start', description: 'Начать работу с ботом' },
+        { command: 'help', description: 'Получить помощь' },
+        { command: 'subscription', description: 'Информация о подписке' }
+      ]);
+      logger.info('Bot commands registered successfully');
+    } catch (error) {
+      logger.error('Failed to register bot commands', { error });
+      // Не блокируем запуск бота, если команды не зарегистрировались
+    }
 
     // Проверяем, не запущен ли бот уже перед launch
     if (isBotRunning) {
