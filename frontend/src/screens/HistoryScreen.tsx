@@ -736,7 +736,11 @@ export function HistoryScreen({ onBack, activeTab, onTabChange }: HistoryScreenP
       {/* Subscription Modal for History */}
       <SubscriptionModal
         isOpen={showSubscriptionModal}
-        onClose={() => setShowSubscriptionModal(false)}
+        onClose={() => {
+          setShowSubscriptionModal(false);
+          // Возвращаемся на главную страницу при закрытии
+          onTabChange('home');
+        }}
         title="Требуется подписка"
         message="Подписка — это ваш доступ к полному функционалу. Оформите её прямо сейчас и продолжайте работу без ограничений."
         showHistoryMessage={false}

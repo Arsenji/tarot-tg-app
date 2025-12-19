@@ -103,18 +103,12 @@ export function SubscriptionModal({
             </div>
 
             {/* Footer */}
-            <div className="mt-6 flex space-x-3">
+            <div className="mt-6 flex justify-end">
               <Button
                 onClick={onClose}
-                className="flex-1 px-4 py-2 bg-slate-600 hover:bg-slate-500 text-gray-300 border border-slate-400/30 rounded-lg text-sm font-medium transition-all duration-300"
+                className="px-6 py-2 bg-slate-600 hover:bg-slate-500 text-gray-300 border border-slate-400/30 rounded-lg text-sm font-medium transition-all duration-300"
               >
-                Отмена
-              </Button>
-              <Button
-                onClick={handleSubscribe}
-                className="flex-1 px-4 py-2 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white rounded-lg text-sm font-medium transition-all duration-300 shadow-lg"
-              >
-                Оформить подписку
+                Закрыть
               </Button>
             </div>
           </motion.div>
