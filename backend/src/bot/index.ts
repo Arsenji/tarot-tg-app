@@ -28,6 +28,7 @@ let yooKassa: YooKassaService;
 // Клавиатуры
 const getMainKeyboard = () => {
   return Markup.keyboard([
+    ['Открыть приложение'],
     ['Купить подписку', 'Моя подписка'],
     ['Помощь', 'Оставить отзыв']
   ]).resize();
@@ -129,22 +130,32 @@ const initializeBot = () => {
       }
 
       try {
-        await ctx.reply(
-          '🔮 Добро пожаловать в Таро-бот!\n\n' +
+        // Получаем информацию о подписке
+        const subscriptionStatus = await checkSubscriptionStatus(userId);
+        
+        // Формируем приветственное сообщение
+        let welcomeMessage = '🔮 Добро пожаловать в Таро-бот!\n\n' +
           'Я помогу вам получить ответы на важные вопросы с помощью карт Таро.\n' +
-          'Мой искусственный интеллект был специально обучен опытными тарологами, поэтому каждое предсказание максимально приближено и ничем не отличается от настоящей консультации.\n\n' +
-          '✨ Почему именно этот бот?\n\n' +
-          'Ваши тайны в безопасности — все запросы абсолютно анонимны.\n\n' +
-          'Вы всегда можете вернуться и просмотреть историю своих раскладов.\n\n' +
-          'Ответы формируются мгновенно и доступны в любое время.\n\n' +
-          '🎁 В бесплатном доступе:\n\n' +
-          '🃏 «Совет дня» — 1 раз каждый день\n\n' +
-          '❓ 1 вопрос «Да / Нет»\n\n' +
-          '🔮 1 расклад на 3 карты\n\n' +
-          'Нажмите кнопку «Начать», чтобы открыть веб-приложение и начать гадание.',
-          getStartKeyboard()
-        );
-        logger.info('Reply sent in /start', { userId });
+          'Мой искусственный интеллект был специально обучен опытными тарологами, поэтому каждое предсказание максимально приближено и ничем не отличается от настоящей консультации.\n\n';
+        
+        // Добавляем информацию о подписке
+        if (subscriptionStatus.hasSubscription && !subscriptionStatus.isExpired) {
+          const expiresAt = subscriptionStatus.expiresAt 
+            ? new Date(subscriptionStatus.expiresAt).toLocaleDateString('ru-RU')
+            : 'Неизвестно';
+          welcomeMessage += `✅ У вас активная подписка до ${expiresAt}\n\n`;
+        } else {
+          welcomeMessage += '🎁 В бесплатном доступе:\n' +
+            '🃏 «Совет дня» — 1 раз каждый день\n' +
+            '❓ 1 вопрос «Да / Нет»\n' +
+            '🔮 1 расклад на 3 карты\n\n';
+        }
+        
+        welcomeMessage += 'Выберите действие:';
+        
+        // Сразу показываем главное меню
+        await ctx.reply(welcomeMessage, getMainKeyboard());
+        logger.info('Reply sent in /start with main menu', { userId });
       } catch (replyError) {
         logger.error('Error sending reply in /start', { error: replyError, userId });
         throw replyError;
@@ -222,8 +233,8 @@ const initializeBot = () => {
     }
   });
 
-  // Обработка кнопки "Начать"
-  bot.hears('Начать', async (ctx: Context) => {
+  // Обработка кнопки "Открыть приложение"
+  bot.hears('Открыть приложение', async (ctx: Context) => {
     try {
       const userId = ctx.from?.id;
       if (!userId) return;
@@ -234,18 +245,35 @@ const initializeBot = () => {
         return;
       }
 
+      const subscriptionInfo = await checkSubscriptionStatus(user.telegramId);
+
+      let message = '🎉 Отлично! Теперь у вас есть доступ к веб-приложению.\n\n';
+      
+      if (subscriptionInfo.hasSubscription) {
+        message += '✅ У вас активная подписка — доступны все функции!\n\n';
+      } else {
+        message += '🎁 В бесплатном доступе:\n' +
+          '🃏 «Совет дня» — 1 раз каждый день\n' +
+          '❓ 1 вопрос «Да / Нет»\n' +
+          '🔮 1 расклад на 3 карты\n\n';
+      }
+
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      const webAppUrl = `${frontendUrl}?tgWebAppStartParam=${userId}`;
+
       await ctx.reply(
-        '🎉 Отлично! Теперь у вас есть доступ к веб-приложению.\n\n' +
-        'Нажмите кнопку «Открыть», чтобы открыть веб-приложение и начать гадание.',
-        getOpenKeyboard()
+        message + 'Нажмите кнопку ниже, чтобы открыть веб-приложение:',
+        Markup.inlineKeyboard([
+          [Markup.button.webApp('🔮 Открыть приложение', webAppUrl)]
+        ])
       );
     } catch (error) {
-      logger.error('Error in "Начать" handler', { error, userId: ctx.from?.id });
+      logger.error('Error in "Открыть приложение" handler', { error, userId: ctx.from?.id });
       await ctx.reply('Произошла ошибка. Попробуйте позже.');
     }
   });
 
-  // Обработка кнопки "Открыть"
+  // Обработка кнопки "Открыть" (для обратной совместимости)
   bot.hears('Открыть', async (ctx: Context) => {
     try {
       const userId = ctx.from?.id;
