@@ -100,41 +100,62 @@ const initializeBot = () => {
   bot.start(async (ctx: Context) => {
     try {
       const userId = ctx.from?.id;
-      if (!userId) return;
+      logger.info('Received /start command', { userId, username: ctx.from?.username });
+      
+      if (!userId) {
+        logger.warn('No userId in /start command');
+        return;
+      }
 
       // Создаем или обновляем пользователя
-      await User.findOneAndUpdate(
-        { telegramId: userId },
-        {
-          telegramId: userId,
-          firstName: ctx.from?.first_name || '',
-          lastName: ctx.from?.last_name || '',
-          username: ctx.from?.username || '',
-          languageCode: ctx.from?.language_code || 'ru',
-          subscriptionStatus: 0,
-          freeYesNoUsed: false
-        },
-        { upsert: true, new: true }
-      );
+      try {
+        await User.findOneAndUpdate(
+          { telegramId: userId },
+          {
+            telegramId: userId,
+            firstName: ctx.from?.first_name || '',
+            lastName: ctx.from?.last_name || '',
+            username: ctx.from?.username || '',
+            languageCode: ctx.from?.language_code || 'ru',
+            subscriptionStatus: 0,
+            freeYesNoUsed: false
+          },
+          { upsert: true, new: true }
+        );
+        logger.info('User created/updated in /start', { userId });
+      } catch (dbError) {
+        logger.error('Database error in /start', { error: dbError, userId });
+        // Продолжаем выполнение даже если БД недоступна
+      }
 
-      await ctx.reply(
-        '🔮 Добро пожаловать в Таро-бот!\n\n' +
-        'Я помогу вам получить ответы на важные вопросы с помощью карт Таро.\n' +
-        'Мой искусственный интеллект был специально обучен опытными тарологами, поэтому каждое предсказание максимально приближено и ничем не отличается от настоящей консультации.\n\n' +
-        '✨ Почему именно этот бот?\n\n' +
-        'Ваши тайны в безопасности — все запросы абсолютно анонимны.\n\n' +
-        'Вы всегда можете вернуться и просмотреть историю своих раскладов.\n\n' +
-        'Ответы формируются мгновенно и доступны в любое время.\n\n' +
-        '🎁 В бесплатном доступе:\n\n' +
-        '🃏 «Совет дня» — 1 раз каждый день\n\n' +
-        '❓ 1 вопрос «Да / Нет»\n\n' +
-        '🔮 1 расклад на 3 карты\n\n' +
-        'Нажмите кнопку «Начать», чтобы открыть веб-приложение и начать гадание.',
-        getStartKeyboard()
-      );
+      try {
+        await ctx.reply(
+          '🔮 Добро пожаловать в Таро-бот!\n\n' +
+          'Я помогу вам получить ответы на важные вопросы с помощью карт Таро.\n' +
+          'Мой искусственный интеллект был специально обучен опытными тарологами, поэтому каждое предсказание максимально приближено и ничем не отличается от настоящей консультации.\n\n' +
+          '✨ Почему именно этот бот?\n\n' +
+          'Ваши тайны в безопасности — все запросы абсолютно анонимны.\n\n' +
+          'Вы всегда можете вернуться и просмотреть историю своих раскладов.\n\n' +
+          'Ответы формируются мгновенно и доступны в любое время.\n\n' +
+          '🎁 В бесплатном доступе:\n\n' +
+          '🃏 «Совет дня» — 1 раз каждый день\n\n' +
+          '❓ 1 вопрос «Да / Нет»\n\n' +
+          '🔮 1 расклад на 3 карты\n\n' +
+          'Нажмите кнопку «Начать», чтобы открыть веб-приложение и начать гадание.',
+          getStartKeyboard()
+        );
+        logger.info('Reply sent in /start', { userId });
+      } catch (replyError) {
+        logger.error('Error sending reply in /start', { error: replyError, userId });
+        throw replyError;
+      }
     } catch (error) {
-      logger.error('Error in /start command', { error, userId: ctx.from?.id });
-      await ctx.reply('Произошла ошибка. Попробуйте позже.');
+      logger.error('Error in /start command', { error, userId: ctx.from?.id, stack: error instanceof Error ? error.stack : undefined });
+      try {
+        await ctx.reply('Произошла ошибка. Попробуйте позже.');
+      } catch (replyError) {
+        logger.error('Failed to send error message in /start', { error: replyError });
+      }
     }
   });
 
@@ -666,9 +687,11 @@ const startBot = async () => {
 
     // Создаем бота с токеном
     bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
+    logger.info('Bot instance created');
 
     // Инициализируем обработчики
     initializeBot();
+    logger.info('Bot handlers initialized');
 
     // Регистрируем команды бота (чтобы они отображались в меню)
     try {
@@ -682,6 +705,12 @@ const startBot = async () => {
       logger.error('Failed to register bot commands', { error });
       // Не блокируем запуск бота, если команды не зарегистрировались
     }
+    
+    // Проверяем, что обработчики зарегистрированы
+    logger.info('Bot ready to launch', { 
+      hasStartHandler: !!bot,
+      isBotRunning 
+    });
 
     // Проверяем, не запущен ли бот уже перед launch
     if (isBotRunning) {
@@ -728,6 +757,14 @@ const startBot = async () => {
         await bot.launch();
         isBotRunning = true;
         logger.info('🤖 Telegram Bot started in getUpdates mode');
+        
+        // Проверяем, что бот действительно работает
+        try {
+          const botInfo = await bot.telegram.getMe();
+          logger.info('Bot info retrieved', { username: botInfo.username, id: botInfo.id });
+        } catch (infoError) {
+          logger.error('Failed to get bot info', { error: infoError });
+        }
       } catch (error: any) {
         // Проверяем на конфликт 409
         if (error?.response?.error_code === 409) {
