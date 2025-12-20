@@ -19,13 +19,6 @@ export function SubscriptionModal({
   message, 
   showHistoryMessage = false 
 }: SubscriptionModalProps) {
-  const handleSubscribe = () => {
-    // Редирект в Telegram бот с командой /buy_subscription
-    if (typeof window !== 'undefined') {
-      window.open('https://t.me/tarolog_app_bot?start=buy_subscription', '_blank');
-    }
-  };
-
   return (
     <AnimatePresence>
       {isOpen && (
