@@ -356,6 +356,7 @@ router.post('/yes-no', async (req: any, res) => {
 
     // Получаем русское название карты
     const russianCardName = getRussianCardName(randomCard);
+    const imagePath = getCardImagePath(randomCard, isReversed);
 
     // Сохраняем расклад
     await openAIService.saveReading(
@@ -384,6 +385,8 @@ router.post('/yes-no', async (req: any, res) => {
           isReversed: isReversed, // Добавляем информацию о перевернутости
           uprightImage: getCardImagePath(randomCard, false),
           reversedImage: getCardImagePath(randomCard, true),
+          image: imagePath, // Добавляем поле image для совместимости
+          imagePath: imagePath, // Добавляем поле imagePath для совместимости
           uprightInterpretation: isReversed ? '' : interpretationText,
           reversedInterpretation: isReversed ? interpretationText : ''
         },
