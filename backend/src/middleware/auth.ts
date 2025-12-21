@@ -59,8 +59,40 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
         path: req.path,
         method: req.method,
         telegramId: decoded.telegramId,
-        decodedPayload: { telegramId: decoded.telegramId, username: decoded.username }
+        decodedPayload: { telegramId: decoded.telegramId, username: decoded.username },
+        adminTelegramId: process.env.ADMIN_TELEGRAM_ID
       });
+      
+      // Если пользователь не найден, но это администратор - создаем его автоматически
+      const adminTelegramId = process.env.ADMIN_TELEGRAM_ID;
+      const isAdmin = adminTelegramId && decoded.telegramId.toString() === adminTelegramId.toString();
+      
+      if (isAdmin) {
+        logger.info('Admin user not found, creating automatically', { telegramId: decoded.telegramId });
+        try {
+          const newUser = await User.create({
+            telegramId: decoded.telegramId,
+            firstName: decoded.username || 'Admin',
+            lastName: '',
+            username: decoded.username || '',
+            languageCode: 'ru',
+            subscriptionStatus: 0,
+            freeYesNoUsed: false
+          });
+          
+          req.user = {
+            userId: (newUser._id as any).toString(),
+            telegramId: newUser.telegramId,
+            username: newUser.username
+          };
+          
+          logger.info('Admin user created successfully', { userId: newUser._id, telegramId: newUser.telegramId });
+          return next();
+        } catch (createError) {
+          logger.error('Failed to create admin user', { error: createError, telegramId: decoded.telegramId });
+        }
+      }
+      
       return res.status(401).json({
         success: false,
         error: 'User not found'
