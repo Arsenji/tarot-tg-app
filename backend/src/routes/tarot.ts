@@ -15,10 +15,14 @@ router.get('/daily-card', async (req: any, res) => {
   try {
     const userId = req.user.telegramId;
     
+    // Проверяем, является ли пользователь администратором
+    const adminTelegramId = process.env.ADMIN_TELEGRAM_ID;
+    const isAdmin = adminTelegramId && userId.toString() === adminTelegramId.toString();
+    
     // Проверяем подписку
     const subscriptionStatus = await checkSubscriptionStatus(userId);
     
-    if (!subscriptionStatus.hasSubscription) {
+    if (!subscriptionStatus.hasSubscription && !isAdmin) {
       return res.status(403).json({
         success: false,
         error: 'Subscription required',
@@ -72,10 +76,14 @@ router.post('/three-cards', async (req: any, res) => {
     const userId = req.user.telegramId;
     const { question } = req.body;
     
+    // Проверяем, является ли пользователь администратором
+    const adminTelegramId = process.env.ADMIN_TELEGRAM_ID;
+    const isAdmin = adminTelegramId && userId.toString() === adminTelegramId.toString();
+    
     // Проверяем подписку
     const subscriptionStatus = await checkSubscriptionStatus(userId);
     
-    if (!subscriptionStatus.hasSubscription) {
+    if (!subscriptionStatus.hasSubscription && !isAdmin) {
       return res.status(403).json({
         success: false,
         error: 'Subscription required',
@@ -159,11 +167,15 @@ router.post('/yes-no', async (req: any, res) => {
       });
     }
 
+    // Проверяем, является ли пользователь администратором
+    const adminTelegramId = process.env.ADMIN_TELEGRAM_ID;
+    const isAdmin = adminTelegramId && userId.toString() === adminTelegramId.toString();
+    
     // Проверяем подписку или бесплатное использование
     const subscriptionStatus = await checkSubscriptionStatus(userId);
     const hasUsedFree = await hasUsedFreeYesNo(userId);
     
-    if (!subscriptionStatus.hasSubscription && hasUsedFree) {
+    if (!subscriptionStatus.hasSubscription && !isAdmin && hasUsedFree) {
       return res.status(403).json({
         success: false,
         error: 'Free Yes/No reading already used. Subscription required.',
