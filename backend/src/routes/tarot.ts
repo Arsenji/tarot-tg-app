@@ -288,7 +288,8 @@ router.get('/subscription-status', async (req: any, res) => {
       userIdType: typeof userId,
       adminIdType: typeof adminTelegramId,
       userIdString: userId.toString(),
-      adminIdString: adminTelegramId?.toString()
+      adminIdString: adminTelegramId?.toString(),
+      comparison: `${userId.toString()} === ${adminTelegramId?.toString()}`
     });
     
     // Проверяем подписку
