@@ -106,10 +106,25 @@ const startServer = async () => {
     
     // Запускаем Telegram бота ПОСЛЕ сервера
     // bot.launch() - блокирующая операция (long polling), но сервер уже запущен
-    await startBot();
+    // Важно: запускаем бота в отдельном промиссе, чтобы ошибки бота не завершали сервер
+    startBot().catch((error) => {
+      logger.error('Failed to start bot, but server is running', { error });
+      // НЕ завершаем процесс - сервер должен работать даже без бота
+    });
   } catch (error) {
     logger.error('Failed to start server', { error });
-    process.exit(1);
+    // Только критические ошибки (например, не удалось подключиться к БД) завершают процесс
+    // Но если есть ALLOW_NO_MONGODB, продолжаем работу
+    if (process.env.ALLOW_NO_MONGODB !== 'true') {
+      process.exit(1);
+    } else {
+      logger.warn('Continuing without database connection');
+      // Запускаем сервер даже без БД
+      app.listen(PORT, '0.0.0.0', () => {
+        console.log(`🚀 Server running on port ${PORT} (without MongoDB)`);
+        logger.info(`HTTP server started on port ${PORT} (without MongoDB)`, { port: PORT, environment: process.env.NODE_ENV });
+      });
+    }
   }
 };
 
