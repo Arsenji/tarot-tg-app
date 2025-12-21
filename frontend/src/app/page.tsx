@@ -14,6 +14,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<'home' | 'history'>('home');
   const [showWelcome, setShowWelcome] = useState(true);
   const [currentScreen, setCurrentScreen] = useState<'main' | 'oneCard' | 'threeCards' | 'yesNo'>('main');
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
     // Инициализируем Telegram WebApp
@@ -117,19 +118,43 @@ export default function Home() {
         // У пользователя есть подписка, переключаемся на историю
         setActiveTab('history');
       } else {
+        // Убеждаемся, что мы остаемся на главной странице
+        setActiveTab('home');
+        
+        // Предотвращаем показ модального окна, если оно уже открыто
+        if (isModalOpen) {
+          return;
+        }
+        
+        setIsModalOpen(true);
+        
         // У пользователя нет подписки, показываем модальное окно
         // Создаем временное состояние для модального окна
         const modal = document.createElement('div');
         modal.id = 'subscription-modal-history';
         
-        const closeModal = () => {
+        const closeModal = (e?: Event) => {
+          if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+          
+          // Удаляем модальное окно из DOM
           if (modal && modal.parentNode) {
             modal.parentNode.removeChild(modal);
           }
+          
           // Очищаем функцию из window
           delete (window as any).closeModal;
+          
+          // Сбрасываем флаг модального окна
+          setIsModalOpen(false);
+          
           // Остаемся на главной странице (не переключаемся на history)
           setActiveTab('home');
+          
+          // Предотвращаем дальнейшие события
+          return false;
         };
         
         // Привязываем функцию закрытия к window для доступа из onclick
@@ -161,21 +186,42 @@ export default function Home() {
         const backdrop = modal.querySelector('#modal-backdrop');
         
         if (closeBtn) {
-          closeBtn.addEventListener('click', closeModal);
+          closeBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            closeModal(e);
+          });
         }
         
         if (closeButton) {
-          closeButton.addEventListener('click', closeModal);
+          closeButton.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            closeModal(e);
+          });
         }
         
         // Закрытие при клике на фон
         if (backdrop) {
           backdrop.addEventListener('click', (e) => {
             if (e.target === backdrop) {
-              closeModal();
+              e.preventDefault();
+              e.stopPropagation();
+              closeModal(e);
             }
           });
         }
+        
+        // Предотвращаем закрытие через Escape, чтобы не было конфликтов
+        const handleEscape = (e: KeyboardEvent) => {
+          if (e.key === 'Escape' && document.body.contains(modal)) {
+            e.preventDefault();
+            e.stopPropagation();
+            closeModal(e);
+            document.removeEventListener('keydown', handleEscape);
+          }
+        };
+        document.addEventListener('keydown', handleEscape);
       }
     } catch (error) {
       console.error('Error checking subscription:', error);

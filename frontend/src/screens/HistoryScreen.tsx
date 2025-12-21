@@ -83,7 +83,15 @@ export function HistoryScreen({ onBack, activeTab, onTabChange }: HistoryScreenP
   // Загружаем историю при монтировании компонента и при переключении на вкладку истории
   useEffect(() => {
     if (activeTab === 'history') {
-      loadHistory();
+      // Небольшая задержка, чтобы убедиться, что предыдущие модальные окна закрыты
+      const timer = setTimeout(() => {
+        loadHistory();
+      }, 100);
+      
+      return () => clearTimeout(timer);
+    } else {
+      // При переключении с истории на другую вкладку закрываем модальное окно
+      setShowSubscriptionModal(false);
     }
   }, [activeTab]);
 
