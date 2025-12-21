@@ -259,4 +259,37 @@ router.get('/history', async (req: any, res) => {
   }
 });
 
+// Получить статус подписки (для фронтенда)
+router.get('/subscription-status', async (req: any, res) => {
+  try {
+    const userId = req.user.telegramId;
+    
+    // Проверяем подписку
+    const subscriptionStatus = await checkSubscriptionStatus(userId);
+    const hasUsedFreeYesNoValue = await hasUsedFreeYesNo(userId);
+    
+    // Формируем ответ в формате, который ожидает фронтенд
+    const subscriptionInfo = {
+      hasSubscription: subscriptionStatus.hasSubscription,
+      canUseDailyAdvice: subscriptionStatus.hasSubscription, // Только с подпиской
+      canUseYesNo: subscriptionStatus.hasSubscription || !hasUsedFreeYesNoValue, // С подпиской или если не использовал бесплатный
+      canUseThreeCards: subscriptionStatus.hasSubscription, // Только с подпиской
+      remainingDailyAdvice: subscriptionStatus.hasSubscription ? -1 : 0, // -1 означает неограниченно
+      remainingYesNo: subscriptionStatus.hasSubscription ? -1 : (hasUsedFreeYesNoValue ? 0 : 1), // 1 бесплатное использование
+      remainingThreeCards: subscriptionStatus.hasSubscription ? -1 : 0, // -1 означает неограниченно
+    };
+    
+    res.json({
+      success: true,
+      subscriptionInfo
+    });
+  } catch (error) {
+    logger.error('Subscription status error', { error, userId: req.user?.telegramId });
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error'
+    });
+  }
+});
+
 export default router;
