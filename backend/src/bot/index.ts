@@ -724,7 +724,6 @@ const startBot = async () => {
     // Регистрируем команды бота (чтобы они отображались в меню)
     try {
       await bot.telegram.setMyCommands([
-        { command: 'myid', description: 'Показать мой Telegram ID' },
         { command: 'start', description: 'Начать работу с ботом' },
         { command: 'help', description: 'Получить помощь' },
         { command: 'subscription', description: 'Информация о подписке' }
