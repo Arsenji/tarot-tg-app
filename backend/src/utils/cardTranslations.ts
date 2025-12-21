@@ -31,8 +31,34 @@ export function getRussianCardName(englishName: string): string {
 
 // Получить путь к изображению карты
 export function getCardImagePath(cardName: string, isReversed: boolean = false): string {
-  const normalizedName = cardName.toLowerCase().replace(/\s+/g, '_');
-  const basePath = `/images/rider-waite-tarot/major_arcana_${normalizedName}`;
+  // Маппинг английских названий на имена файлов
+  const cardFileMap: Record<string, string> = {
+    'The Fool': 'fool',
+    'The Magician': 'magician',
+    'The High Priestess': 'priestess',
+    'The Empress': 'empress',
+    'The Emperor': 'emperor',
+    'The Hierophant': 'hierophant',
+    'The Lovers': 'lovers',
+    'The Chariot': 'chariot',
+    'Strength': 'strength',
+    'The Hermit': 'hermit',
+    'Wheel of Fortune': 'wheel_of_fortune',
+    'Justice': 'justice',
+    'The Hanged Man': 'hanged_man',
+    'Death': 'death',
+    'Temperance': 'temperance',
+    'The Devil': 'devil',
+    'The Tower': 'tower',
+    'The Star': 'star',
+    'The Moon': 'moon',
+    'The Sun': 'sun',
+    'Judgement': 'judgement',
+    'The World': 'world'
+  };
+  
+  const fileName = cardFileMap[cardName] || cardName.toLowerCase().replace(/\s+/g, '_');
+  const basePath = `/images/rider-waite-tarot/major_arcana_${fileName}`;
   return isReversed ? `${basePath}_reversed.png` : `${basePath}.png`;
 }
 
