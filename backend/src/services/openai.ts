@@ -182,6 +182,24 @@ class OpenAIService {
   private buildReadingPrompt(request: ReadingRequest): string {
     const { cards, question, readingType } = request;
     
+    if (readingType === 'yesno') {
+      // Специальный промпт для да/нет расклада
+      const card = cards[0];
+      let prompt = `Ты опытный таролог. Ты получил вопрос: "${question}"\n\n`;
+      prompt += `Выпала карта: ${card.name}`;
+      if (card.isReversed) {
+        prompt += ' (перевернутая)';
+      }
+      prompt += '\n\n';
+      prompt += 'ВАЖНО: Твой ответ должен начинаться с четкого ответа "Да" или "Нет" в первой строке.\n';
+      prompt += 'После этого дай краткую интерпретацию (2-3 предложения), объясняющую, почему карта указывает на этот ответ.\n';
+      prompt += 'Интерпретация должна быть конкретной и связанной с вопросом пользователя.\n';
+      prompt += 'Не упоминай другие карты или позиции - это расклад из одной карты для ответа да/нет.';
+      
+      return prompt;
+    }
+    
+    // Обычный промпт для других типов раскладов
     let prompt = `Интерпретируй расклад "${readingType}" с картами:\n`;
     
     cards.forEach((card, index) => {

@@ -4,6 +4,7 @@ import { openAIService } from '../services/openai';
 import { checkSubscriptionStatus, hasUsedFreeYesNo, markFreeYesNoUsed } from '../utils/subscription';
 import { TarotReading } from '../models/TarotReading';
 import logger from '../utils/logger';
+import { getRussianCardName, getCardImagePath } from '../utils/cardTranslations';
 
 const router = express.Router();
 
@@ -277,12 +278,39 @@ router.post('/yes-no', async (req: any, res) => {
       readingType: 'yesno'
     });
 
-    if (!interpretation.success) {
+    if (!interpretation.success || !interpretation.interpretation) {
       return res.status(500).json({
         success: false,
         error: 'Failed to get Yes/No interpretation'
       });
     }
+
+    // Извлекаем ответ "Да" или "Нет" из интерпретации
+    const interpretationText = interpretation.interpretation;
+    const firstLine = interpretationText.split('\n')[0].trim();
+    let answer: 'Да' | 'Нет' = 'Да';
+    
+    if (firstLine.toLowerCase().includes('нет') || firstLine.toLowerCase().startsWith('нет')) {
+      answer = 'Нет';
+    } else if (firstLine.toLowerCase().includes('да') || firstLine.toLowerCase().startsWith('да')) {
+      answer = 'Да';
+    } else {
+      // Если ответ не найден явно, определяем по карте
+      const positiveCards = ['The Sun', 'The Star', 'The World', 'The Wheel of Fortune', 'The Lovers', 'The Chariot'];
+      const negativeCards = ['The Tower', 'Death', 'The Devil', 'The Hanged Man', 'The Moon'];
+      
+      if (negativeCards.includes(randomCard) && isReversed) {
+        answer = 'Нет';
+      } else if (positiveCards.includes(randomCard) && !isReversed) {
+        answer = 'Да';
+      } else {
+        // По умолчанию определяем по перевернутости
+        answer = isReversed ? 'Нет' : 'Да';
+      }
+    }
+
+    // Получаем русское название карты
+    const russianCardName = getRussianCardName(randomCard);
 
     // Сохраняем расклад
     await openAIService.saveReading(
@@ -293,7 +321,7 @@ router.post('/yes-no', async (req: any, res) => {
         question,
         readingType: 'yesno'
       },
-      interpretation.interpretation!
+      interpretationText
     );
 
     // Отмечаем использование бесплатного Yes/No
@@ -301,10 +329,22 @@ router.post('/yes-no', async (req: any, res) => {
       await markFreeYesNoUsed(userId);
     }
 
+    // Формируем ответ в формате, который ожидает фронтенд
     res.json({
       success: true,
-      card: cardData,
-      interpretation: interpretation.interpretation
+      data: {
+        card: {
+          name: russianCardName, // Русское название
+          category: 'major',
+          uprightImage: getCardImagePath(randomCard, false),
+          reversedImage: getCardImagePath(randomCard, true),
+          uprightInterpretation: isReversed ? '' : interpretationText,
+          reversedInterpretation: isReversed ? interpretationText : ''
+        },
+        answer: answer,
+        interpretation: interpretationText,
+        category: 'major'
+      }
     });
   } catch (error) {
     logger.error('Yes/No error', { error, userId: req.user?.telegramId });
