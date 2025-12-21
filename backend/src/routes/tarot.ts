@@ -10,7 +10,7 @@ const router = express.Router();
 // Middleware для всех маршрутов
 router.use(authenticateToken);
 
-// Получить карту дня
+// Получить карту дня (GET)
 router.get('/daily-card', async (req: any, res) => {
   try {
     const userId = req.user.telegramId;
@@ -63,6 +63,66 @@ router.get('/daily-card', async (req: any, res) => {
     });
   } catch (error) {
     logger.error('Daily card error', { error, userId: req.user?.telegramId });
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error'
+    });
+  }
+});
+
+// Получить карту дня (POST) - для совместимости с фронтендом
+router.post('/daily-advice', async (req: any, res) => {
+  try {
+    const userId = req.user.telegramId;
+    
+    // Проверяем, является ли пользователь администратором
+    const adminTelegramId = process.env.ADMIN_TELEGRAM_ID;
+    const isAdmin = adminTelegramId && userId.toString() === adminTelegramId.toString();
+    
+    // Проверяем подписку
+    const subscriptionStatus = await checkSubscriptionStatus(userId);
+    
+    if (!subscriptionStatus.hasSubscription && !isAdmin) {
+      return res.status(403).json({
+        success: false,
+        error: 'Subscription required',
+        subscriptionRequired: true
+      });
+    }
+
+    // Здесь должна быть логика выбора случайной карты
+    const cards = [
+      'The Fool', 'The Magician', 'The High Priestess', 'The Empress', 'The Emperor',
+      'The Hierophant', 'The Lovers', 'The Chariot', 'Strength', 'The Hermit',
+      'Wheel of Fortune', 'Justice', 'The Hanged Man', 'Death', 'Temperance',
+      'The Devil', 'The Tower', 'The Star', 'The Moon', 'The Sun',
+      'Judgement', 'The World'
+    ];
+    
+    const randomCard = cards[Math.floor(Math.random() * cards.length)];
+    
+    const interpretation = await openAIService.getCardInterpretation({
+      cardName: randomCard,
+      position: 'daily',
+      isReversed: Math.random() > 0.5
+    });
+
+    if (!interpretation.success) {
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to get card interpretation'
+      });
+    }
+
+    res.json({
+      success: true,
+      card: {
+        name: randomCard,
+        interpretation: interpretation.interpretation
+      }
+    });
+  } catch (error) {
+    logger.error('Daily advice error', { error, userId: req.user?.telegramId });
     res.status(500).json({
       success: false,
       error: 'Internal server error'
