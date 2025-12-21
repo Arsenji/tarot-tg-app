@@ -100,25 +100,36 @@ router.post('/daily-advice', async (req: any, res) => {
     ];
     
     const randomCard = cards[Math.floor(Math.random() * cards.length)];
+    const isReversed = Math.random() > 0.5;
     
     const interpretation = await openAIService.getCardInterpretation({
       cardName: randomCard,
       position: 'daily',
-      isReversed: Math.random() > 0.5
+      isReversed
     });
 
-    if (!interpretation.success) {
+    if (!interpretation.success || !interpretation.interpretation) {
       return res.status(500).json({
         success: false,
         error: 'Failed to get card interpretation'
       });
     }
 
+    // Формируем ответ в формате, который ожидает фронтенд
     res.json({
       success: true,
-      card: {
-        name: randomCard,
-        interpretation: interpretation.interpretation
+      data: {
+        card: {
+          name: randomCard,
+          category: 'major', // По умолчанию все карты из списка - старшие арканы
+          uprightImage: `/images/rider-waite-tarot/${randomCard.toLowerCase().replace(/\s+/g, '_')}.png`,
+          reversedImage: `/images/rider-waite-tarot/${randomCard.toLowerCase().replace(/\s+/g, '_')}_reversed.png`,
+          uprightInterpretation: isReversed ? '' : interpretation.interpretation,
+          reversedInterpretation: isReversed ? interpretation.interpretation : ''
+        },
+        interpretation: interpretation.interpretation,
+        advice: interpretation.interpretation, // Для совместимости с фронтендом
+        category: 'major'
       }
     });
   } catch (error) {
