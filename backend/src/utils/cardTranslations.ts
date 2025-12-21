@@ -31,7 +31,7 @@ export function getRussianCardName(englishName: string): string {
 
 // Получить путь к изображению карты
 export function getCardImagePath(cardName: string, isReversed: boolean = false): string {
-  // Маппинг английских названий на имена файлов
+  // Маппинг английских названий на имена файлов (соответствует реальным файлам в папке)
   const cardFileMap: Record<string, string> = {
     'The Fool': 'fool',
     'The Magician': 'magician',
@@ -43,9 +43,9 @@ export function getCardImagePath(cardName: string, isReversed: boolean = false):
     'The Chariot': 'chariot',
     'Strength': 'strength',
     'The Hermit': 'hermit',
-    'Wheel of Fortune': 'wheel_of_fortune',
+    'Wheel of Fortune': 'fortune', // Файл: major_arcana_fortune.png
     'Justice': 'justice',
-    'The Hanged Man': 'hanged_man',
+    'The Hanged Man': 'hanged', // Файл: major_arcana_hanged.png
     'Death': 'death',
     'Temperance': 'temperance',
     'The Devil': 'devil',
@@ -59,6 +59,9 @@ export function getCardImagePath(cardName: string, isReversed: boolean = false):
   
   const fileName = cardFileMap[cardName] || cardName.toLowerCase().replace(/\s+/g, '_');
   const basePath = `/images/rider-waite-tarot/major_arcana_${fileName}`;
-  return isReversed ? `${basePath}_reversed.png` : `${basePath}.png`;
+  
+  // Если карта перевернута, но нет файла _reversed, используем обычный файл
+  // (в проекте пока нет отдельных файлов для перевернутых карт)
+  return `${basePath}.png`;
 }
 
