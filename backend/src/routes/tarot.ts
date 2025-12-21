@@ -297,15 +297,22 @@ router.get('/subscription-status', async (req: any, res) => {
     const hasUsedFreeYesNoValue = await hasUsedFreeYesNo(userId);
     
     // Формируем ответ в формате, который ожидает фронтенд
+    // ВРЕМЕННО: разрешаем все расклады для всех пользователей (для отладки)
     const subscriptionInfo = {
       hasSubscription: subscriptionStatus.hasSubscription || isAdmin, // Админ всегда имеет подписку
-      canUseDailyAdvice: subscriptionStatus.hasSubscription || isAdmin, // С подпиской или админ
-      canUseYesNo: subscriptionStatus.hasSubscription || isAdmin || !hasUsedFreeYesNoValue, // С подпиской, админ или если не использовал бесплатный
-      canUseThreeCards: subscriptionStatus.hasSubscription || isAdmin, // С подпиской или админ
-      remainingDailyAdvice: (subscriptionStatus.hasSubscription || isAdmin) ? -1 : 0, // -1 означает неограниченно
-      remainingYesNo: (subscriptionStatus.hasSubscription || isAdmin) ? -1 : (hasUsedFreeYesNoValue ? 0 : 1), // 1 бесплатное использование
-      remainingThreeCards: (subscriptionStatus.hasSubscription || isAdmin) ? -1 : 0, // -1 означает неограниченно
+      canUseDailyAdvice: true, // ВРЕМЕННО: всегда доступно
+      canUseYesNo: true, // ВРЕМЕННО: всегда доступно
+      canUseThreeCards: true, // ВРЕМЕННО: всегда доступно
+      remainingDailyAdvice: -1, // -1 означает неограниченно
+      remainingYesNo: -1, // -1 означает неограниченно
+      remainingThreeCards: -1, // -1 означает неограниченно
     };
+    
+    logger.info('Subscription info response', {
+      userId,
+      isAdmin,
+      subscriptionInfo
+    });
     
     res.json({
       success: true,
