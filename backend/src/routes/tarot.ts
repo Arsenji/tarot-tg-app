@@ -264,19 +264,23 @@ router.get('/subscription-status', async (req: any, res) => {
   try {
     const userId = req.user.telegramId;
     
+    // Проверяем, является ли пользователь администратором (безлимитный доступ)
+    const adminTelegramId = process.env.ADMIN_TELEGRAM_ID;
+    const isAdmin = adminTelegramId && userId.toString() === adminTelegramId.toString();
+    
     // Проверяем подписку
     const subscriptionStatus = await checkSubscriptionStatus(userId);
     const hasUsedFreeYesNoValue = await hasUsedFreeYesNo(userId);
     
     // Формируем ответ в формате, который ожидает фронтенд
     const subscriptionInfo = {
-      hasSubscription: subscriptionStatus.hasSubscription,
-      canUseDailyAdvice: subscriptionStatus.hasSubscription, // Только с подпиской
-      canUseYesNo: subscriptionStatus.hasSubscription || !hasUsedFreeYesNoValue, // С подпиской или если не использовал бесплатный
-      canUseThreeCards: subscriptionStatus.hasSubscription, // Только с подпиской
-      remainingDailyAdvice: subscriptionStatus.hasSubscription ? -1 : 0, // -1 означает неограниченно
-      remainingYesNo: subscriptionStatus.hasSubscription ? -1 : (hasUsedFreeYesNoValue ? 0 : 1), // 1 бесплатное использование
-      remainingThreeCards: subscriptionStatus.hasSubscription ? -1 : 0, // -1 означает неограниченно
+      hasSubscription: subscriptionStatus.hasSubscription || isAdmin, // Админ всегда имеет подписку
+      canUseDailyAdvice: subscriptionStatus.hasSubscription || isAdmin, // С подпиской или админ
+      canUseYesNo: subscriptionStatus.hasSubscription || isAdmin || !hasUsedFreeYesNoValue, // С подпиской, админ или если не использовал бесплатный
+      canUseThreeCards: subscriptionStatus.hasSubscription || isAdmin, // С подпиской или админ
+      remainingDailyAdvice: (subscriptionStatus.hasSubscription || isAdmin) ? -1 : 0, // -1 означает неограниченно
+      remainingYesNo: (subscriptionStatus.hasSubscription || isAdmin) ? -1 : (hasUsedFreeYesNoValue ? 0 : 1), // 1 бесплатное использование
+      remainingThreeCards: (subscriptionStatus.hasSubscription || isAdmin) ? -1 : 0, // -1 означает неограниченно
     };
     
     res.json({
