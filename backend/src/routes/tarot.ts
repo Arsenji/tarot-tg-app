@@ -41,11 +41,12 @@ router.get('/daily-card', async (req: any, res) => {
     ];
     
     const randomCard = cards[Math.floor(Math.random() * cards.length)];
+    const isReversed = Math.random() > 0.5;
     
     const interpretation = await openAIService.getCardInterpretation({
       cardName: randomCard,
       position: 'daily',
-      isReversed: Math.random() > 0.5
+      isReversed
     });
 
     if (!interpretation.success) {
@@ -55,10 +56,13 @@ router.get('/daily-card', async (req: any, res) => {
       });
     }
 
+    // Получаем русское название карты
+    const russianCardName = getRussianCardName(randomCard);
+
     res.json({
       success: true,
       card: {
-        name: randomCard,
+        name: russianCardName, // Русское название
         interpretation: interpretation.interpretation
       }
     });
@@ -116,15 +120,18 @@ router.post('/daily-advice', async (req: any, res) => {
       });
     }
 
+    // Получаем русское название карты
+    const russianCardName = getRussianCardName(randomCard);
+
     // Формируем ответ в формате, который ожидает фронтенд
     res.json({
       success: true,
       data: {
         card: {
-          name: randomCard,
+          name: russianCardName, // Русское название
           category: 'major', // По умолчанию все карты из списка - старшие арканы
-          uprightImage: `/images/rider-waite-tarot/${randomCard.toLowerCase().replace(/\s+/g, '_')}.png`,
-          reversedImage: `/images/rider-waite-tarot/${randomCard.toLowerCase().replace(/\s+/g, '_')}_reversed.png`,
+          uprightImage: getCardImagePath(randomCard, false),
+          reversedImage: getCardImagePath(randomCard, true),
           uprightInterpretation: isReversed ? '' : interpretation.interpretation,
           reversedInterpretation: isReversed ? interpretation.interpretation : ''
         },
@@ -172,6 +179,7 @@ router.post('/three-cards', async (req: any, res) => {
     ];
 
     const selectedCards = [];
+    const selectedCardsForAPI = []; // Для API (английские названия)
     const usedIndices = new Set();
     
     // Выбираем 3 уникальные карты
@@ -179,16 +187,32 @@ router.post('/three-cards', async (req: any, res) => {
       const randomIndex = Math.floor(Math.random() * cards.length);
       if (!usedIndices.has(randomIndex)) {
         usedIndices.add(randomIndex);
+        const englishName = cards[randomIndex];
+        const russianName = getRussianCardName(englishName);
+        const isReversed = Math.random() > 0.5;
+        const position = selectedCards.length === 0 ? 'past' : selectedCards.length === 1 ? 'present' : 'future';
+        
+        // Для API используем английские названия
+        selectedCardsForAPI.push({
+          name: englishName,
+          position: position,
+          isReversed: isReversed
+        });
+        
+        // Для ответа используем русские названия
         selectedCards.push({
-          name: cards[randomIndex],
-          position: selectedCards.length === 0 ? 'past' : selectedCards.length === 1 ? 'present' : 'future',
-          isReversed: Math.random() > 0.5
+          name: russianName, // Русское название
+          position: position,
+          isReversed: isReversed,
+          category: 'major',
+          uprightImage: getCardImagePath(englishName, false),
+          reversedImage: getCardImagePath(englishName, true)
         });
       }
     }
 
     const interpretation = await openAIService.getReadingInterpretation({
-      cards: selectedCards,
+      cards: selectedCardsForAPI, // Используем английские названия для API
       question,
       readingType: 'three'
     });
@@ -200,12 +224,12 @@ router.post('/three-cards', async (req: any, res) => {
       });
     }
 
-    // Сохраняем расклад
+    // Сохраняем расклад (используем английские названия для сохранения)
     await openAIService.saveReading(
       req.user.userId,
       userId,
       {
-        cards: selectedCards,
+        cards: selectedCardsForAPI,
         question,
         readingType: 'three'
       },
@@ -214,8 +238,11 @@ router.post('/three-cards', async (req: any, res) => {
 
     res.json({
       success: true,
-      cards: selectedCards,
-      interpretation: interpretation.interpretation
+      data: {
+        cards: selectedCards, // Русские названия для фронтенда
+        interpretation: interpretation.interpretation,
+        category: 'major'
+      }
     });
   } catch (error) {
     logger.error('Three cards error', { error, userId: req.user?.telegramId });
