@@ -336,6 +336,7 @@ router.post('/yes-no', async (req: any, res) => {
         card: {
           name: russianCardName, // Русское название
           category: 'major',
+          isReversed: isReversed, // Добавляем информацию о перевернутости
           uprightImage: getCardImagePath(randomCard, false),
           reversedImage: getCardImagePath(randomCard, true),
           uprightInterpretation: isReversed ? '' : interpretationText,
