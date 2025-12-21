@@ -190,7 +190,7 @@ router.post('/three-cards', async (req: any, res) => {
         const englishName = cards[randomIndex];
         const russianName = getRussianCardName(englishName);
         const isReversed = Math.random() > 0.5;
-        const position = selectedCards.length === 0 ? 'past' : selectedCards.length === 1 ? 'present' : 'future';
+        const position: 'past' | 'present' | 'future' = selectedCards.length === 0 ? 'past' : selectedCards.length === 1 ? 'present' : 'future';
         
         const imagePath = getCardImagePath(englishName, isReversed);
         
