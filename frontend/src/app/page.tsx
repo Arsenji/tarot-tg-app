@@ -92,13 +92,24 @@ export default function Home() {
 
       const token = await getAuthToken();
       
+      // Если токен не получен, не показываем поп-ап, просто остаемся на главной
+      if (!token) {
+        console.warn('No auth token available, staying on home page');
+        return;
+      }
+      
       const response = await fetch(getApiEndpoint('/tarot/subscription-status'), {
         method: 'GET',
         credentials: 'include',
         headers: {
-          'Authorization': token ? `Bearer ${token}` : '',
+          'Authorization': `Bearer ${token}`,
         },
       });
+      
+      if (!response.ok) {
+        console.error('Failed to check subscription status:', response.status);
+        return;
+      }
       
       const data = await response.json();
       
