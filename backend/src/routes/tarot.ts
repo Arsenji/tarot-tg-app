@@ -280,6 +280,17 @@ router.get('/subscription-status', async (req: any, res) => {
     const adminTelegramId = process.env.ADMIN_TELEGRAM_ID;
     const isAdmin = adminTelegramId && userId.toString() === adminTelegramId.toString();
     
+    // Логируем для отладки
+    logger.info('Subscription status check', {
+      userId,
+      adminTelegramId,
+      isAdmin,
+      userIdType: typeof userId,
+      adminIdType: typeof adminTelegramId,
+      userIdString: userId.toString(),
+      adminIdString: adminTelegramId?.toString()
+    });
+    
     // Проверяем подписку
     const subscriptionStatus = await checkSubscriptionStatus(userId);
     const hasUsedFreeYesNoValue = await hasUsedFreeYesNo(userId);
