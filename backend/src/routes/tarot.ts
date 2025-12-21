@@ -122,6 +122,7 @@ router.post('/daily-advice', async (req: any, res) => {
 
     // Получаем русское название карты
     const russianCardName = getRussianCardName(randomCard);
+    const imagePath = getCardImagePath(randomCard, isReversed);
 
     // Формируем ответ в формате, который ожидает фронтенд
     res.json({
@@ -130,8 +131,11 @@ router.post('/daily-advice', async (req: any, res) => {
         card: {
           name: russianCardName, // Русское название
           category: 'major', // По умолчанию все карты из списка - старшие арканы
+          isReversed: isReversed, // Добавляем информацию о перевернутости
           uprightImage: getCardImagePath(randomCard, false),
           reversedImage: getCardImagePath(randomCard, true),
+          image: imagePath, // Добавляем поле image для совместимости
+          imagePath: imagePath, // Добавляем поле imagePath для совместимости
           uprightInterpretation: isReversed ? '' : interpretation.interpretation,
           reversedInterpretation: isReversed ? interpretation.interpretation : ''
         },
