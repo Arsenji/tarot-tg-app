@@ -65,7 +65,7 @@ export default function Home() {
             // Если токена нет, получаем его через Telegram WebApp
             const initData = (window as any).Telegram.WebApp.initData;
             
-            const authResponse = await fetch('/api/auth/telegram', {
+            const authResponse = await fetch(getApiEndpoint('/auth/telegram'), {
               method: 'POST',
               credentials: 'include',
               headers: {

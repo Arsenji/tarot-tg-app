@@ -82,7 +82,7 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
           if (!token && typeof window !== 'undefined' && (window as any).Telegram?.WebApp?.initData) {
             const initData = (window as any).Telegram.WebApp.initData;
             
-            const authResponse = await fetch('/api/auth/telegram', {
+            const authResponse = await fetch(getApiEndpoint('/auth/telegram'), {
               method: 'POST',
               credentials: 'include',
               headers: { 'Content-Type': 'application/json' },
@@ -263,7 +263,12 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
         </div>
       </div>
       <BottomNavigation activeTab={activeTab} onTabChange={onTabChange} />
-      <SubscriptionModal isOpen={isSubscriptionModalOpen} onClose={handleCloseSubscriptionModal} />
+      <SubscriptionModal 
+        isOpen={isSubscriptionModalOpen} 
+        onClose={handleCloseSubscriptionModal}
+        title="Требуется подписка"
+        message="Подписка — это ваш доступ к полному функционалу. Оформите её прямо сейчас и продолжайте работу без ограничений."
+      />
     </div>
   );
 };
