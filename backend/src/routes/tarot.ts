@@ -192,6 +192,18 @@ router.post('/three-cards', async (req: any, res) => {
         const isReversed = Math.random() > 0.5;
         const position = selectedCards.length === 0 ? 'past' : selectedCards.length === 1 ? 'present' : 'future';
         
+        const imagePath = getCardImagePath(englishName, isReversed);
+        
+        // Логируем для отладки
+        logger.info('Selected card for three-card reading', {
+          index: selectedCards.length,
+          englishName,
+          russianName,
+          position,
+          isReversed,
+          imagePath
+        });
+        
         // Для API используем английские названия
         selectedCardsForAPI.push({
           name: englishName,
@@ -206,7 +218,9 @@ router.post('/three-cards', async (req: any, res) => {
           isReversed: isReversed,
           category: 'major',
           uprightImage: getCardImagePath(englishName, false),
-          reversedImage: getCardImagePath(englishName, true)
+          reversedImage: getCardImagePath(englishName, true),
+          image: imagePath, // Добавляем поле image для совместимости
+          imagePath: imagePath // Добавляем поле imagePath для совместимости
         });
       }
     }
