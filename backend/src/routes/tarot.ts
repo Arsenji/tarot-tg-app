@@ -488,7 +488,8 @@ router.get('/subscription-status', async (req: any, res) => {
 });
 
 // Уточняющий вопрос для расклада
-router.post('/clarifying-question', async (req: any, res) => {
+// Поддерживаем оба пути для обратной совместимости
+const handleClarifyingQuestion = async (req: any, res: any) => {
   try {
     const userId = req.user.telegramId;
     const { clarifyingQuestion, originalQuestion, originalCard, originalInterpretation, readingType } = req.body;
