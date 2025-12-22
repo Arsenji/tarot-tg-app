@@ -43,8 +43,11 @@ router.get('/daily-card', async (req: any, res) => {
     const randomCard = cards[Math.floor(Math.random() * cards.length)];
     const isReversed = Math.random() > 0.5;
     
+    // Получаем русское название карты для промпта
+    const russianCardName = getRussianCardName(randomCard);
+    
     const interpretation = await openAIService.getCardInterpretation({
-      cardName: randomCard,
+      cardName: russianCardName, // Используем русское название в промпте
       position: 'daily',
       isReversed
     });
@@ -55,9 +58,6 @@ router.get('/daily-card', async (req: any, res) => {
         error: 'Failed to get card interpretation'
       });
     }
-
-    // Получаем русское название карты
-    const russianCardName = getRussianCardName(randomCard);
 
     res.json({
       success: true,
