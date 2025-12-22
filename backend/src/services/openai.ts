@@ -158,13 +158,31 @@ class OpenAIService {
   private buildCardInterpretationPrompt(request: CardInterpretationRequest): string {
     const { cardName, position, isReversed, question, context } = request;
     
-    let prompt = `Интерпретируй карту "${cardName}"`;
+    // Определяем русское название позиции
+    let positionText = '';
+    if (position === 'daily') {
+      positionText = 'совет дня';
+    } else if (position === 'past') {
+      positionText = 'прошлое';
+    } else if (position === 'present') {
+      positionText = 'настоящее';
+    } else if (position === 'future') {
+      positionText = 'будущее';
+    } else {
+      positionText = position;
+    }
+    
+    let prompt = `Ты опытный таролог. Дай интерпретацию карты "${cardName}"`;
     
     if (isReversed) {
       prompt += ' в перевернутом положении';
     }
     
-    prompt += ` в позиции "${position}".`;
+    if (position === 'daily') {
+      prompt += ' для совета на день.';
+    } else {
+      prompt += ` в позиции "${positionText}".`;
+    }
     
     if (question) {
       prompt += ` Вопрос: "${question}".`;
@@ -174,7 +192,16 @@ class OpenAIService {
       prompt += ` Контекст: "${context}".`;
     }
     
-    prompt += ' Дай глубокую и мудрую интерпретацию этой карты.';
+    if (position === 'daily') {
+      prompt += '\n\nВАЖНО:\n';
+      prompt += '- Используй только русский язык, не упоминай английские названия карт или позиций.\n';
+      prompt += '- Дай практический совет на день, связанный с этой картой.\n';
+      prompt += '- Пиши естественно, как опытный таролог, обращаясь к человеку на "ты".\n';
+      prompt += '- Не упоминай название карты в кавычках или английские слова вроде "daily" или "position".\n';
+      prompt += '- Сосредоточься на практических рекомендациях и мудрых советах.';
+    } else {
+      prompt += '\n\nДай глубокую и мудрую интерпретацию этой карты. Используй только русский язык, не упоминай английские названия.';
+    }
     
     return prompt;
   }
