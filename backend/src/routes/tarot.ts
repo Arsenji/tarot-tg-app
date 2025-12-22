@@ -494,14 +494,33 @@ const handleClarifyingQuestion = async (req: any, res: any) => {
     const userId = req.user.telegramId;
     const { clarifyingQuestion, originalQuestion, originalCard, originalInterpretation, readingType } = req.body;
     
+    logger.info('Clarifying question request', {
+      userId,
+      hasClarifyingQuestion: !!clarifyingQuestion,
+      clarifyingQuestionLength: clarifyingQuestion?.length,
+      hasOriginalQuestion: !!originalQuestion,
+      hasOriginalCard: !!originalCard,
+      hasOriginalInterpretation: !!originalInterpretation,
+      readingType
+    });
+    
     if (!clarifyingQuestion || clarifyingQuestion.trim().length < 3) {
+      logger.warn('Invalid clarifying question', { clarifyingQuestion, length: clarifyingQuestion?.length });
       return res.status(400).json({
         success: false,
         error: 'Clarifying question must be at least 3 characters long'
       });
     }
 
-    if (!originalQuestion || !originalCard || !originalInterpretation) {
+    // Используем clarifyingQuestion как fallback для originalQuestion
+    const finalOriginalQuestion = originalQuestion || clarifyingQuestion;
+    
+    if (!finalOriginalQuestion || !originalCard || !originalInterpretation) {
+      logger.warn('Missing required fields', {
+        hasOriginalQuestion: !!finalOriginalQuestion,
+        hasOriginalCard: !!originalCard,
+        hasOriginalInterpretation: !!originalInterpretation
+      });
       return res.status(400).json({
         success: false,
         error: 'Missing required fields: originalQuestion, originalCard, originalInterpretation'
