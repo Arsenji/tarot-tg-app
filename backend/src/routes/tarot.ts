@@ -550,7 +550,11 @@ const handleClarifyingQuestion = async (req: any, res: any) => {
       error: 'Internal server error'
     });
   }
-});
+};
+
+// Регистрируем оба пути для обратной совместимости
+router.post('/clarifying-question', handleClarifyingQuestion);
+router.post('/clarifying-answer', handleClarifyingQuestion); // Для обратной совместимости со старым кодом
 
 // Добавляем алиас для обратной совместимости со старым кодом
 router.post('/clarifying-answer', async (req: any, res) => {
