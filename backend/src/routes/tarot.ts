@@ -487,4 +487,68 @@ router.get('/subscription-status', async (req: any, res) => {
   }
 });
 
+// Уточняющий вопрос для расклада
+router.post('/clarifying-question', async (req: any, res) => {
+  try {
+    const userId = req.user.telegramId;
+    const { clarifyingQuestion, originalQuestion, originalCard, originalInterpretation, readingType } = req.body;
+    
+    if (!clarifyingQuestion || clarifyingQuestion.trim().length < 3) {
+      return res.status(400).json({
+        success: false,
+        error: 'Clarifying question must be at least 3 characters long'
+      });
+    }
+
+    if (!originalQuestion || !originalCard || !originalInterpretation) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: originalQuestion, originalCard, originalInterpretation'
+      });
+    }
+
+    // Получаем ответ от GPT
+    const answer = await openAIService.getClarifyingAnswer(
+      clarifyingQuestion,
+      originalQuestion,
+      originalCard,
+      originalInterpretation,
+      readingType || 'yesno'
+    );
+
+    if (!answer.success || !answer.interpretation) {
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to get clarifying answer'
+      });
+    }
+
+    // Извлекаем ответ "Да" или "Нет" для yes/no расклада
+    let yesNoAnswer: 'Да' | 'Нет' | null = null;
+    if (readingType === 'yesno') {
+      const firstLine = answer.interpretation.split('\n')[0].trim();
+      if (firstLine.toLowerCase().includes('нет') || firstLine.toLowerCase().startsWith('нет')) {
+        yesNoAnswer = 'Нет';
+      } else if (firstLine.toLowerCase().includes('да') || firstLine.toLowerCase().startsWith('да')) {
+        yesNoAnswer = 'Да';
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        answer: answer.interpretation,
+        yesNoAnswer: yesNoAnswer,
+        card: originalCard // Возвращаем ту же карту
+      }
+    });
+  } catch (error) {
+    logger.error('Clarifying question error', { error, userId: req.user?.telegramId });
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error'
+    });
+  }
+});
+
 export default router;

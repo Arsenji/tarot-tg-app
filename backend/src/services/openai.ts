@@ -246,6 +246,79 @@ class OpenAIService {
     return prompt;
   }
 
+  async getClarifyingAnswer(
+    clarifyingQuestion: string,
+    originalQuestion: string,
+    originalCard: { name: string; isReversed?: boolean },
+    originalInterpretation: string,
+    readingType: string
+  ): Promise<OpenAIResponse> {
+    if (!this.isConfigured || !this.openai) {
+      return {
+        success: false,
+        error: 'OpenAI service not configured'
+      };
+    }
+
+    try {
+      let prompt = `Ты опытный таролог. Пользователь задал основной вопрос: "${originalQuestion}"\n\n`;
+      prompt += `На этот вопрос выпала карта "${originalCard.name}"`;
+      if (originalCard.isReversed) {
+        prompt += ' (перевернутая)';
+      }
+      prompt += `.\n\n`;
+      prompt += `Интерпретация основного расклада: "${originalInterpretation}"\n\n`;
+      prompt += `Теперь пользователь задает уточняющий вопрос: "${clarifyingQuestion}"\n\n`;
+      
+      if (readingType === 'yesno') {
+        prompt += 'ВАЖНО: Твой ответ должен начинаться с четкого ответа "Да" или "Нет" в первой строке.\n';
+        prompt += 'После этого дай краткую интерпретацию (2-3 предложения), объясняющую, почему карта указывает на этот ответ в контексте уточняющего вопроса.\n';
+        prompt += 'Используй только русский язык, не упоминай английские названия карт или позиций.\n';
+        prompt += 'Интерпретация должна быть конкретной и связанной с уточняющим вопросом пользователя.';
+      } else {
+        prompt += 'Дай мудрый ответ на уточняющий вопрос, основываясь на карте и интерпретации основного расклада.\n';
+        prompt += 'Используй только русский язык, не упоминай английские названия карт или позиций.\n';
+        prompt += 'Ответ должен быть конкретным и связанным с уточняющим вопросом.';
+      }
+      
+      const response = await this.openai.chat.completions.create({
+        model: 'gpt-3.5-turbo',
+        messages: [
+          {
+            role: 'system',
+            content: 'Ты опытный таролог, который дает глубокие и мудрые интерпретации карт Таро. Отвечай на русском языке.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        max_tokens: 400,
+        temperature: 0.7
+      });
+
+      const interpretation = response.choices[0]?.message?.content?.trim();
+      
+      if (!interpretation) {
+        return {
+          success: false,
+          error: 'Empty response from OpenAI'
+        };
+      }
+
+      return {
+        success: true,
+        interpretation
+      };
+    } catch (error) {
+      logger.error('OpenAI clarifying answer error', { error, clarifyingQuestion, originalQuestion });
+      return {
+        success: false,
+        error: 'Failed to get clarifying answer'
+      };
+    }
+  }
+
   async saveReading(
     userId: string,
     telegramId: number,
