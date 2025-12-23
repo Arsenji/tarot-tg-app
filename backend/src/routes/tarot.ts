@@ -20,8 +20,23 @@ router.get('/daily-card', async (req: any, res) => {
     const adminTelegramId = process.env.ADMIN_TELEGRAM_ID;
     const isAdmin = adminTelegramId && userId.toString() === adminTelegramId.toString();
     
+    logger.info('Daily advice access check', {
+      userId,
+      adminTelegramId,
+      isAdmin,
+      userIdString: userId.toString(),
+      adminIdString: adminTelegramId?.toString()
+    });
+    
     // Проверяем подписку
     const subscriptionStatus = await checkSubscriptionStatus(userId);
+    
+    logger.info('Daily advice subscription check', {
+      userId,
+      hasSubscription: subscriptionStatus.hasSubscription,
+      isAdmin,
+      willAllow: subscriptionStatus.hasSubscription || isAdmin
+    });
     
     if (!subscriptionStatus.hasSubscription && !isAdmin) {
       return res.status(403).json({
@@ -84,8 +99,23 @@ router.post('/daily-advice', async (req: any, res) => {
     const adminTelegramId = process.env.ADMIN_TELEGRAM_ID;
     const isAdmin = adminTelegramId && userId.toString() === adminTelegramId.toString();
     
+    logger.info('Daily advice access check', {
+      userId,
+      adminTelegramId,
+      isAdmin,
+      userIdString: userId.toString(),
+      adminIdString: adminTelegramId?.toString()
+    });
+    
     // Проверяем подписку
     const subscriptionStatus = await checkSubscriptionStatus(userId);
+    
+    logger.info('Daily advice subscription check', {
+      userId,
+      hasSubscription: subscriptionStatus.hasSubscription,
+      isAdmin,
+      willAllow: subscriptionStatus.hasSubscription || isAdmin
+    });
     
     if (!subscriptionStatus.hasSubscription && !isAdmin) {
       return res.status(403).json({
@@ -163,8 +193,23 @@ router.post('/three-cards', async (req: any, res) => {
     const adminTelegramId = process.env.ADMIN_TELEGRAM_ID;
     const isAdmin = adminTelegramId && userId.toString() === adminTelegramId.toString();
     
+    logger.info('Three cards access check', {
+      userId,
+      adminTelegramId,
+      isAdmin,
+      userIdString: userId.toString(),
+      adminIdString: adminTelegramId?.toString()
+    });
+    
     // Проверяем подписку
     const subscriptionStatus = await checkSubscriptionStatus(userId);
+    
+    logger.info('Three cards subscription check', {
+      userId,
+      hasSubscription: subscriptionStatus.hasSubscription,
+      isAdmin,
+      willAllow: subscriptionStatus.hasSubscription || isAdmin
+    });
     
     if (!subscriptionStatus.hasSubscription && !isAdmin) {
       return res.status(403).json({
@@ -288,9 +333,25 @@ router.post('/yes-no', async (req: any, res) => {
     const adminTelegramId = process.env.ADMIN_TELEGRAM_ID;
     const isAdmin = adminTelegramId && userId.toString() === adminTelegramId.toString();
     
+    logger.info('Yes/No access check', {
+      userId,
+      adminTelegramId,
+      isAdmin,
+      userIdString: userId.toString(),
+      adminIdString: adminTelegramId?.toString()
+    });
+    
     // Проверяем подписку или бесплатное использование
     const subscriptionStatus = await checkSubscriptionStatus(userId);
     const hasUsedFree = await hasUsedFreeYesNo(userId);
+    
+    logger.info('Yes/No subscription check', {
+      userId,
+      hasSubscription: subscriptionStatus.hasSubscription,
+      isAdmin,
+      hasUsedFree,
+      willAllow: subscriptionStatus.hasSubscription || isAdmin || !hasUsedFree
+    });
     
     if (!subscriptionStatus.hasSubscription && !isAdmin && hasUsedFree) {
       return res.status(403).json({
