@@ -332,6 +332,15 @@ class OpenAIService {
     interpretation: string
   ): Promise<boolean> {
     try {
+      logger.info('Attempting to save reading', {
+        userId,
+        telegramId,
+        readingType: request.readingType,
+        cardsCount: request.cards.length,
+        hasQuestion: !!request.question,
+        interpretationLength: interpretation?.length || 0
+      });
+
       const reading = new TarotReading({
         userId,
         telegramId,
@@ -346,11 +355,24 @@ class OpenAIService {
         interpretation
       });
 
-      await reading.save();
-      logger.info('Tarot reading saved', { userId, telegramId, readingType: request.readingType });
+      const savedReading = await reading.save();
+      logger.info('Tarot reading saved successfully', {
+        userId,
+        telegramId,
+        readingType: request.readingType,
+        readingId: savedReading._id,
+        createdAt: savedReading.createdAt
+      });
       return true;
-    } catch (error) {
-      logger.error('Failed to save tarot reading', { error, userId, telegramId });
+    } catch (error: any) {
+      logger.error('Failed to save tarot reading', {
+        error: error.message,
+        stack: error.stack,
+        userId,
+        telegramId,
+        readingType: request.readingType,
+        errorName: error.name
+      });
       return false;
     }
   }
