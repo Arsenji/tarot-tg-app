@@ -156,22 +156,28 @@ router.post('/daily-advice', async (req: any, res) => {
 
     // Сохраняем расклад
     try {
-      const saved = await openAIService.saveReading(
-        req.user.userId,
-        userId,
-        {
-          cards: [{
-            name: randomCard, // Английское название для сохранения
-            position: 'daily',
-            isReversed: isReversed
-          }],
-          question: '', // Daily advice не имеет вопроса
-          readingType: 'single'
-        },
-        interpretation.interpretation!
-      );
-      if (!saved) {
-        logger.warn('Failed to save daily-advice reading', { userId, telegramId: userId });
+      if (interpretation.interpretation && interpretation.interpretation.trim().length > 0) {
+        const saved = await openAIService.saveReading(
+          req.user.userId,
+          userId,
+          {
+            cards: [{
+              name: randomCard, // Английское название для сохранения
+              position: 'daily',
+              isReversed: isReversed
+            }],
+            question: '', // Daily advice не имеет вопроса
+            readingType: 'single'
+          },
+          interpretation.interpretation
+        );
+        if (!saved) {
+          logger.warn('Failed to save daily-advice reading', { userId, telegramId: userId });
+        } else {
+          logger.info('Daily-advice reading saved successfully', { userId, telegramId: userId });
+        }
+      } else {
+        logger.warn('Skipping save: interpretation is empty', { userId, telegramId: userId });
       }
     } catch (saveError) {
       logger.error('Error saving daily-advice reading', { error: saveError, userId, telegramId: userId });
@@ -312,18 +318,24 @@ router.post('/three-cards', async (req: any, res) => {
 
     // Сохраняем расклад (используем английские названия для сохранения)
     try {
-      const saved = await openAIService.saveReading(
-        req.user.userId,
-        userId,
-        {
-          cards: selectedCardsForAPI,
-          question,
-          readingType: 'three'
-        },
-        interpretation.interpretation!
-      );
-      if (!saved) {
-        logger.warn('Failed to save three-cards reading', { userId, telegramId: userId });
+      if (interpretation.interpretation && interpretation.interpretation.trim().length > 0) {
+        const saved = await openAIService.saveReading(
+          req.user.userId,
+          userId,
+          {
+            cards: selectedCardsForAPI,
+            question,
+            readingType: 'three'
+          },
+          interpretation.interpretation
+        );
+        if (!saved) {
+          logger.warn('Failed to save three-cards reading', { userId, telegramId: userId });
+        } else {
+          logger.info('Three-cards reading saved successfully', { userId, telegramId: userId });
+        }
+      } else {
+        logger.warn('Skipping save: interpretation is empty', { userId, telegramId: userId });
       }
     } catch (saveError) {
       logger.error('Error saving three-cards reading', { error: saveError, userId, telegramId: userId });
@@ -451,18 +463,24 @@ router.post('/yes-no', async (req: any, res) => {
 
     // Сохраняем расклад
     try {
-      const saved = await openAIService.saveReading(
-        req.user.userId,
-        userId,
-        {
-          cards: [cardData],
-          question,
-          readingType: 'yesno'
-        },
-        interpretationText
-      );
-      if (!saved) {
-        logger.warn('Failed to save yes-no reading', { userId, telegramId: userId });
+      if (interpretationText && interpretationText.trim().length > 0) {
+        const saved = await openAIService.saveReading(
+          req.user.userId,
+          userId,
+          {
+            cards: [cardData],
+            question,
+            readingType: 'yesno'
+          },
+          interpretationText
+        );
+        if (!saved) {
+          logger.warn('Failed to save yes-no reading', { userId, telegramId: userId });
+        } else {
+          logger.info('Yes-no reading saved successfully', { userId, telegramId: userId });
+        }
+      } else {
+        logger.warn('Skipping save: interpretation is empty', { userId, telegramId: userId });
       }
     } catch (saveError) {
       logger.error('Error saving yes-no reading', { error: saveError, userId, telegramId: userId });
