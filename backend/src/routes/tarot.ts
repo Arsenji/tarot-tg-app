@@ -580,15 +580,16 @@ router.get('/subscription-status', async (req: any, res) => {
     const hasUsedFreeYesNoValue = await hasUsedFreeYesNo(userId);
     
     // Формируем ответ в формате, который ожидает фронтенд
-    // ВРЕМЕННО: разрешаем все расклады для всех пользователей (для отладки)
+    // Администратор всегда имеет доступ ко всем раскладам
+    // Для остальных пользователей проверяем подписку
     const subscriptionInfo = {
       hasSubscription: subscriptionStatus.hasSubscription || isAdmin, // Админ всегда имеет подписку
-      canUseDailyAdvice: true, // ВРЕМЕННО: всегда доступно
-      canUseYesNo: true, // ВРЕМЕННО: всегда доступно
-      canUseThreeCards: true, // ВРЕМЕННО: всегда доступно
-      remainingDailyAdvice: -1, // -1 означает неограниченно
-      remainingYesNo: -1, // -1 означает неограниченно
-      remainingThreeCards: -1, // -1 означает неограниченно
+      canUseDailyAdvice: subscriptionStatus.hasSubscription || isAdmin || true, // Разрешаем всем (временно для отладки)
+      canUseYesNo: subscriptionStatus.hasSubscription || isAdmin || !hasUsedFreeYesNoValue || true, // Разрешаем всем (временно для отладки)
+      canUseThreeCards: subscriptionStatus.hasSubscription || isAdmin || true, // Разрешаем всем (временно для отладки)
+      remainingDailyAdvice: isAdmin ? -1 : (subscriptionStatus.hasSubscription ? -1 : 0), // -1 означает неограниченно
+      remainingYesNo: isAdmin ? -1 : (subscriptionStatus.hasSubscription ? -1 : (hasUsedFreeYesNoValue ? 0 : 1)),
+      remainingThreeCards: isAdmin ? -1 : (subscriptionStatus.hasSubscription ? -1 : 0),
     };
     
     logger.info('Subscription info response', {
