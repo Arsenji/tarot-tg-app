@@ -495,9 +495,55 @@ router.get('/history', async (req: any, res) => {
       .limit(parseInt(limit as string))
       .lean();
 
+    // Преобразуем данные в формат, который ожидает фронтенд
+    const transformedReadings = readings.map((reading: any) => {
+      // Преобразуем readingType в type
+      let type: 'single' | 'three_cards' | 'yes_no';
+      if (reading.readingType === 'single') {
+        type = 'single';
+      } else if (reading.readingType === 'three') {
+        type = 'three_cards';
+      } else {
+        type = 'yes_no';
+      }
+
+      // Преобразуем карты в формат для фронтенда
+      const transformedCards = reading.cards.map((card: any) => {
+        const russianName = getRussianCardName(card.name);
+        const imagePath = getCardImagePath(card.name, card.isReversed);
+        
+        return {
+          name: russianName, // Русское название
+          imagePath: imagePath,
+          meaning: card.interpretation || reading.interpretation || '',
+          advice: reading.interpretation || '',
+          keywords: '', // Можно добавить позже
+          isReversed: card.isReversed,
+          position: card.position
+        };
+      });
+
+      return {
+        _id: reading._id.toString(),
+        type: type,
+        category: 'major', // По умолчанию все карты из списка - старшие арканы
+        userQuestion: reading.question || undefined,
+        cards: transformedCards,
+        interpretation: reading.interpretation,
+        clarifyingQuestions: reading.clarifyingQuestions || [],
+        createdAt: reading.createdAt
+      };
+    });
+
+    logger.info('History retrieved', {
+      userId,
+      count: transformedReadings.length,
+      totalReadings: readings.length
+    });
+
     res.json({
       success: true,
-      readings
+      readings: transformedReadings
     });
   } catch (error) {
     logger.error('History error', { error, userId: req.user?.telegramId });
