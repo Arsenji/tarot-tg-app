@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import mongoose from 'mongoose';
 import logger from '../utils/logger';
 import { TarotReading } from '../models/TarotReading';
 
@@ -332,13 +333,26 @@ class OpenAIService {
     interpretation: string
   ): Promise<boolean> {
     try {
+      // Проверяем подключение к базе данных
+      if (mongoose.connection.readyState !== 1) {
+        logger.error('MongoDB not connected, cannot save reading', {
+          readyState: mongoose.connection.readyState,
+          userId,
+          telegramId,
+          readingType: request.readingType
+        });
+        return false;
+      }
+
       logger.info('Attempting to save reading', {
         userId,
         telegramId,
         readingType: request.readingType,
         cardsCount: request.cards.length,
         hasQuestion: !!request.question,
-        interpretationLength: interpretation?.length || 0
+        interpretationLength: interpretation?.length || 0,
+        dbReadyState: mongoose.connection.readyState,
+        dbName: mongoose.connection.name
       });
 
       const reading = new TarotReading({
@@ -360,8 +374,9 @@ class OpenAIService {
         userId,
         telegramId,
         readingType: request.readingType,
-        readingId: savedReading._id,
-        createdAt: savedReading.createdAt
+        readingId: savedReading._id.toString(),
+        createdAt: savedReading.createdAt,
+        cardsCount: savedReading.cards.length
       });
       return true;
     } catch (error: any) {
@@ -371,7 +386,9 @@ class OpenAIService {
         userId,
         telegramId,
         readingType: request.readingType,
-        errorName: error.name
+        errorName: error.name,
+        dbReadyState: mongoose.connection.readyState,
+        errorCode: error.code
       });
       return false;
     }
