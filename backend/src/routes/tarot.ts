@@ -154,6 +154,22 @@ router.post('/daily-advice', async (req: any, res) => {
     }
     const imagePath = getCardImagePath(randomCard, isReversed);
 
+    // Сохраняем расклад
+    await openAIService.saveReading(
+      req.user.userId,
+      userId,
+      {
+        cards: [{
+          name: randomCard, // Английское название для сохранения
+          position: 'daily',
+          isReversed: isReversed
+        }],
+        question: '', // Daily advice не имеет вопроса
+        readingType: 'single'
+      },
+      interpretation.interpretation!
+    );
+
     // Формируем ответ в формате, который ожидает фронтенд
     res.json({
       success: true,
