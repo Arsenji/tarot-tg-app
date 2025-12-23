@@ -155,20 +155,27 @@ router.post('/daily-advice', async (req: any, res) => {
     const imagePath = getCardImagePath(randomCard, isReversed);
 
     // Сохраняем расклад
-    await openAIService.saveReading(
-      req.user.userId,
-      userId,
-      {
-        cards: [{
-          name: randomCard, // Английское название для сохранения
-          position: 'daily',
-          isReversed: isReversed
-        }],
-        question: '', // Daily advice не имеет вопроса
-        readingType: 'single'
-      },
-      interpretation.interpretation!
-    );
+    try {
+      const saved = await openAIService.saveReading(
+        req.user.userId,
+        userId,
+        {
+          cards: [{
+            name: randomCard, // Английское название для сохранения
+            position: 'daily',
+            isReversed: isReversed
+          }],
+          question: '', // Daily advice не имеет вопроса
+          readingType: 'single'
+        },
+        interpretation.interpretation!
+      );
+      if (!saved) {
+        logger.warn('Failed to save daily-advice reading', { userId, telegramId: userId });
+      }
+    } catch (saveError) {
+      logger.error('Error saving daily-advice reading', { error: saveError, userId, telegramId: userId });
+    }
 
     // Формируем ответ в формате, который ожидает фронтенд
     res.json({
@@ -304,16 +311,23 @@ router.post('/three-cards', async (req: any, res) => {
     }
 
     // Сохраняем расклад (используем английские названия для сохранения)
-    await openAIService.saveReading(
-      req.user.userId,
-      userId,
-      {
-        cards: selectedCardsForAPI,
-        question,
-        readingType: 'three'
-      },
-      interpretation.interpretation!
-    );
+    try {
+      const saved = await openAIService.saveReading(
+        req.user.userId,
+        userId,
+        {
+          cards: selectedCardsForAPI,
+          question,
+          readingType: 'three'
+        },
+        interpretation.interpretation!
+      );
+      if (!saved) {
+        logger.warn('Failed to save three-cards reading', { userId, telegramId: userId });
+      }
+    } catch (saveError) {
+      logger.error('Error saving three-cards reading', { error: saveError, userId, telegramId: userId });
+    }
 
     res.json({
       success: true,
@@ -436,16 +450,23 @@ router.post('/yes-no', async (req: any, res) => {
     const imagePath = getCardImagePath(randomCard, isReversed);
 
     // Сохраняем расклад
-    await openAIService.saveReading(
-      req.user.userId,
-      userId,
-      {
-        cards: [cardData],
-        question,
-        readingType: 'yesno'
-      },
-      interpretationText
-    );
+    try {
+      const saved = await openAIService.saveReading(
+        req.user.userId,
+        userId,
+        {
+          cards: [cardData],
+          question,
+          readingType: 'yesno'
+        },
+        interpretationText
+      );
+      if (!saved) {
+        logger.warn('Failed to save yes-no reading', { userId, telegramId: userId });
+      }
+    } catch (saveError) {
+      logger.error('Error saving yes-no reading', { error: saveError, userId, telegramId: userId });
+    }
 
     // Отмечаем использование бесплатного Yes/No
     if (!subscriptionStatus.hasSubscription) {
