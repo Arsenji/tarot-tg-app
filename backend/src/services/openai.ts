@@ -344,6 +344,26 @@ class OpenAIService {
         return false;
       }
 
+      // Проверяем, что интерпретация не пустая
+      if (!interpretation || interpretation.trim().length === 0) {
+        logger.error('Cannot save reading: interpretation is empty', {
+          userId,
+          telegramId,
+          readingType: request.readingType
+        });
+        return false;
+      }
+
+      // Проверяем, что есть карты
+      if (!request.cards || request.cards.length === 0) {
+        logger.error('Cannot save reading: no cards provided', {
+          userId,
+          telegramId,
+          readingType: request.readingType
+        });
+        return false;
+      }
+
       logger.info('Attempting to save reading', {
         userId,
         telegramId,
@@ -366,7 +386,7 @@ class OpenAIService {
           interpretation: '' // Будет заполнено отдельно для каждой карты
         })),
         question: request.question || '',
-        interpretation
+        interpretation: interpretation.trim()
       });
 
       const savedReading = await reading.save();
