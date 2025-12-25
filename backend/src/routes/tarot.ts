@@ -1,5 +1,6 @@
 import express from 'express';
 import mongoose from 'mongoose';
+import { Types } from 'mongoose';
 import { authenticateToken } from '../middleware/auth';
 import { openAIService } from '../services/openai';
 import { checkSubscriptionStatus, hasUsedFreeYesNo, markFreeYesNoUsed } from '../utils/subscription';
@@ -690,35 +691,68 @@ router.get('/history', async (req: any, res) => {
       }))
     });
     
-    // Проверяем записи с правильным userId, но без telegramId или с другим telegramId
-    const readingsWithCorrectUserId = await TarotReading.find({ userId: req.user.userId })
-      .select('_id userId telegramId readingType createdAt')
-      .limit(10)
-      .lean();
-    logger.info('Readings with correct userId (checking telegramId)', {
-      count: readingsWithCorrectUserId.length,
-      readings: readingsWithCorrectUserId.map((r: any) => ({
-        _id: r._id,
-        userId: r.userId,
-        telegramId: r.telegramId,
-        telegramIdType: typeof r.telegramId,
-        telegramIdMatches: r.telegramId === userId,
-        readingType: r.readingType
-      }))
-    });
-    
     // Пробуем найти записи по обоим полям
+    // Используем $or для поиска по telegramId ИЛИ userId (для старых записей)
     const readingsByTelegramId = await TarotReading.find({ telegramId: userId })
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit as string))
       .lean();
     
-    const readingsByUserId = await TarotReading.find({ userId: req.user.userId })
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(parseInt(limit as string))
-      .lean();
+    // Пробуем найти по userId (как строка и как ObjectId)
+    let readingsByUserId: any[] = [];
+    try {
+      // Пробуем как строку
+      readingsByUserId = await TarotReading.find({ userId: req.user.userId })
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit as string))
+        .lean();
+      
+      // Если не нашли, пробуем как ObjectId
+      if (readingsByUserId.length === 0 && Types.ObjectId.isValid(req.user.userId)) {
+        readingsByUserId = await TarotReading.find({ userId: new Types.ObjectId(req.user.userId) })
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(parseInt(limit as string))
+          .lean();
+      }
+    } catch (userIdError) {
+      logger.error('Error finding readings by userId', {
+        error: userIdError,
+        userId: req.user.userId,
+        userIdType: typeof req.user.userId
+      });
+    }
+    
+    // Проверяем записи с правильным userId для диагностики
+    let readingsWithCorrectUserId: any[] = [];
+    try {
+      readingsWithCorrectUserId = await TarotReading.find({ 
+        $or: [
+          { userId: req.user.userId },
+          { userId: Types.ObjectId.isValid(req.user.userId) ? new Types.ObjectId(req.user.userId) : req.user.userId }
+        ]
+      })
+        .select('_id userId telegramId readingType createdAt')
+        .limit(10)
+        .lean();
+    } catch (error) {
+      logger.error('Error finding readings for diagnosis', { error, userId: req.user.userId });
+    }
+    
+    logger.info('Readings with correct userId (checking telegramId)', {
+      count: readingsWithCorrectUserId.length,
+      readings: readingsWithCorrectUserId.map((r: any) => ({
+        _id: r._id?.toString(),
+        userId: r.userId?.toString(),
+        userIdType: typeof r.userId,
+        telegramId: r.telegramId,
+        telegramIdType: typeof r.telegramId,
+        telegramIdMatches: r.telegramId === userId,
+        readingType: r.readingType
+      }))
+    });
     
     // ИСПРАВЛЕНИЕ: Используем записи по userId, если по telegramId ничего не найдено
     // Это нужно для старых записей, которые могли быть сохранены без telegramId
