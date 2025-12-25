@@ -410,6 +410,7 @@ class OpenAIService {
           userId,
           telegramId
         });
+        return false;
       } else {
         logger.info('Reading verified in database', {
           readingId: savedReading._id.toString(),
@@ -418,34 +419,13 @@ class OpenAIService {
         });
       }
       
-      // Ограничиваем историю до 20 записей на пользователя
-      // Удаляем самые старые записи, если их больше 20
-      const MAX_HISTORY_PER_USER = 20;
+      // Подсчитываем общее количество записей пользователя для информации
       const userReadingsCount = await TarotReading.countDocuments({ telegramId });
-      
-      if (userReadingsCount > MAX_HISTORY_PER_USER) {
-        // Находим самые старые записи, которые нужно удалить
-        const readingsToDelete = await TarotReading.find({ telegramId })
-          .sort({ createdAt: 1 }) // Сортируем по дате создания (старые первыми)
-          .limit(userReadingsCount - MAX_HISTORY_PER_USER)
-          .select('_id createdAt');
-        
-        if (readingsToDelete.length > 0) {
-          const idsToDelete = readingsToDelete.map(r => r._id);
-          const deleteResult = await TarotReading.deleteMany({ 
-            _id: { $in: idsToDelete },
-            telegramId // Дополнительная проверка безопасности
-          });
-          
-          logger.info('Old readings deleted to maintain history limit', {
-            userId,
-            telegramId,
-            deletedCount: deleteResult.deletedCount,
-            remainingCount: MAX_HISTORY_PER_USER,
-            deletedReadingIds: idsToDelete.map(id => id.toString())
-          });
-        }
-      }
+      logger.info('User readings count after save', {
+        userId,
+        telegramId,
+        totalReadings: userReadingsCount
+      });
       
       return true;
     } catch (error: any) {
