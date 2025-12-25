@@ -228,21 +228,57 @@ class OpenAIService {
     }
     
     // Обычный промпт для других типов раскладов
-    let prompt = `Интерпретируй расклад "${readingType}" с картами:\n`;
+    // Для расклада "три карты" используем русские названия позиций
+    let prompt = '';
     
-    cards.forEach((card, index) => {
-      prompt += `${index + 1}. ${card.name}`;
-      if (card.isReversed) {
-        prompt += ' (перевернутая)';
+    if (readingType === 'three') {
+      // Промпт для расклада трех карт
+      const positionNames: { [key: string]: string } = {
+        'past': 'Прошлое',
+        'present': 'Настоящее',
+        'future': 'Будущее'
+      };
+      
+      prompt = `Ты опытный таролог. Проанализируй расклад трех карт:\n\n`;
+      
+      cards.forEach((card, index) => {
+        const positionName = positionNames[card.position] || card.position;
+        prompt += `${index + 1}. Карта в позиции "${positionName}"`;
+        if (card.isReversed) {
+          prompt += ' (перевернутая)';
+        }
+        prompt += '\n';
+      });
+      
+      if (question) {
+        prompt += `\nВопрос пользователя: "${question}"\n`;
       }
-      prompt += ` в позиции "${card.position}"\n`;
-    });
-    
-    if (question) {
-      prompt += `\nВопрос: "${question}"`;
+      
+      prompt += '\nВАЖНО:\n';
+      prompt += '- Используй ТОЛЬКО русский язык, не упоминай английские названия карт, позиций или слова вроде "three", "past", "present", "future", "position", "card".\n';
+      prompt += '- Используй русские названия позиций: "Прошлое", "Настоящее", "Будущее" вместо английских.\n';
+      prompt += '- Не упоминай английские названия карт (например, "Wheel of Fortune", "The World", "Death").\n';
+      prompt += '- Если нужно упомянуть карту, используй только русское название или опиши её значение.\n';
+      prompt += '- Дай глубокую и мудрую интерпретацию всего расклада, учитывая взаимосвязь карт.\n';
+      prompt += '- Пиши естественно, обращаясь к человеку на "ты".';
+    } else {
+      prompt = `Интерпретируй расклад "${readingType}" с картами:\n`;
+      
+      cards.forEach((card, index) => {
+        prompt += `${index + 1}. ${card.name}`;
+        if (card.isReversed) {
+          prompt += ' (перевернутая)';
+        }
+        prompt += ` в позиции "${card.position}"\n`;
+      });
+      
+      if (question) {
+        prompt += `\nВопрос: "${question}"`;
+      }
+      
+      prompt += '\n\nДай глубокую и мудрую интерпретацию всего расклада, учитывая взаимосвязь карт.';
+      prompt += '\nВАЖНО: Используй только русский язык, не упоминай английские названия карт или позиций.';
     }
-    
-    prompt += '\n\nДай глубокую и мудрую интерпретацию всего расклада, учитывая взаимосвязь карт.';
     
     return prompt;
   }
@@ -383,7 +419,7 @@ class OpenAIService {
           name: card.name,
           position: card.position,
           isReversed: card.isReversed,
-          interpretation: '' // Будет заполнено отдельно для каждой карты
+          interpretation: interpretation.trim() || '' // Используем общую интерпретацию для каждой карты
         })),
         question: request.question || '',
         interpretation: interpretation.trim()
