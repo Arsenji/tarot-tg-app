@@ -923,6 +923,79 @@ const handleClarifyingQuestion = async (req: any, res: any) => {
 
 // Регистрируем оба пути для обратной совместимости
 router.post('/clarifying-question', handleClarifyingQuestion);
-router.post('/clarifying-answer', handleClarifyingQuestion); // Для обратной совместимости со старым кодом
+router.post('/clarifying-answer', handleClarifyingQuestion);
+
+// Тестовый endpoint для диагностики истории
+router.get('/history-debug', async (req: any, res) => {
+  try {
+    const userId = req.user.telegramId;
+    const userObjectId = req.user.userId;
+    
+    // Получаем все записи без фильтра
+    const allReadings = await TarotReading.find({})
+      .limit(10)
+      .select('userId telegramId readingType createdAt')
+      .lean();
+    
+    // Проверяем по telegramId
+    const byTelegramId = await TarotReading.find({ telegramId: userId })
+      .select('_id userId telegramId readingType createdAt')
+      .lean();
+    
+    // Проверяем по userId
+    const byUserId = await TarotReading.find({ userId: userObjectId })
+      .select('_id userId telegramId readingType createdAt')
+      .lean();
+    
+    // Проверяем общее количество
+    const totalCount = await TarotReading.countDocuments({});
+    const countByTelegramId = await TarotReading.countDocuments({ telegramId: userId });
+    const countByUserId = await TarotReading.countDocuments({ userId: userObjectId });
+    
+    res.json({
+      success: true,
+      debug: {
+        currentUser: {
+          userId: userObjectId,
+          telegramId: userId,
+          userIdType: typeof userObjectId,
+          telegramIdType: typeof userId
+        },
+        database: {
+          totalReadings: totalCount,
+          countByTelegramId,
+          countByUserId
+        },
+        sampleReadings: allReadings.map((r: any) => ({
+          _id: r._id.toString(),
+          userId: r.userId,
+          telegramId: r.telegramId,
+          readingType: r.readingType,
+          createdAt: r.createdAt
+        })),
+        readingsByTelegramId: byTelegramId.map((r: any) => ({
+          _id: r._id.toString(),
+          userId: r.userId,
+          telegramId: r.telegramId,
+          readingType: r.readingType,
+          createdAt: r.createdAt
+        })),
+        readingsByUserId: byUserId.map((r: any) => ({
+          _id: r._id.toString(),
+          userId: r.userId,
+          telegramId: r.telegramId,
+          readingType: r.readingType,
+          createdAt: r.createdAt
+        }))
+      }
+    });
+  } catch (error) {
+    logger.error('History debug error', { error, userId: req.user?.telegramId });
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error'
+    });
+  }
+}); // Для обратной совместимости со старым кодом
 
 export default router;
