@@ -191,6 +191,17 @@ router.post('/daily-advice', async (req: any, res) => {
             telegramId: userId,
             cardName: randomCard
           });
+          
+          // Сразу проверяем, что запись действительно в БД
+          const verifyCount = await TarotReading.countDocuments({ 
+            telegramId: userId,
+            readingType: 'single'
+          });
+          logger.info('Verification: readings count for this user after save', {
+            userId: req.user.userId,
+            telegramId: userId,
+            count: verifyCount
+          });
         }
       } else {
         logger.warn('Skipping save: interpretation is empty', { 
@@ -372,6 +383,17 @@ router.post('/three-cards', async (req: any, res) => {
             telegramId: userId,
             cardsCount: selectedCardsForAPI.length
           });
+          
+          // Сразу проверяем, что запись действительно в БД
+          const verifyCount = await TarotReading.countDocuments({ 
+            telegramId: userId,
+            readingType: 'three'
+          });
+          logger.info('Verification: readings count for this user after save', {
+            userId: req.user.userId,
+            telegramId: userId,
+            count: verifyCount
+          });
         }
       } else {
         logger.warn('Skipping save: interpretation is empty', { 
@@ -539,6 +561,17 @@ router.post('/yes-no', async (req: any, res) => {
             userId: req.user.userId, 
             telegramId: userId,
             cardName: randomCard
+          });
+          
+          // Сразу проверяем, что запись действительно в БД
+          const verifyCount = await TarotReading.countDocuments({ 
+            telegramId: userId,
+            readingType: 'yesno'
+          });
+          logger.info('Verification: readings count for this user after save', {
+            userId: req.user.userId,
+            telegramId: userId,
+            count: verifyCount
           });
         }
       } else {
