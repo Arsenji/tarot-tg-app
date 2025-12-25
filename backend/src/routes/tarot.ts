@@ -683,8 +683,27 @@ router.get('/history', async (req: any, res) => {
         _id: r._id,
         userId: r.userId,
         telegramId: r.telegramId,
+        telegramIdType: typeof r.telegramId,
+        telegramIdValue: r.telegramId,
         readingType: r.readingType,
         createdAt: r.createdAt
+      }))
+    });
+    
+    // Проверяем записи с правильным userId, но без telegramId или с другим telegramId
+    const readingsWithCorrectUserId = await TarotReading.find({ userId: req.user.userId })
+      .select('_id userId telegramId readingType createdAt')
+      .limit(10)
+      .lean();
+    logger.info('Readings with correct userId (checking telegramId)', {
+      count: readingsWithCorrectUserId.length,
+      readings: readingsWithCorrectUserId.map((r: any) => ({
+        _id: r._id,
+        userId: r.userId,
+        telegramId: r.telegramId,
+        telegramIdType: typeof r.telegramId,
+        telegramIdMatches: r.telegramId === userId,
+        readingType: r.readingType
       }))
     });
     
@@ -701,8 +720,9 @@ router.get('/history', async (req: any, res) => {
       .limit(parseInt(limit as string))
       .lean();
     
-    // Используем записи по telegramId (основной способ)
-    const readings = readingsByTelegramId;
+    // ИСПРАВЛЕНИЕ: Используем записи по userId, если по telegramId ничего не найдено
+    // Это нужно для старых записей, которые могли быть сохранены без telegramId
+    const readings = readingsByTelegramId.length > 0 ? readingsByTelegramId : readingsByUserId;
     
     logger.info('History query result', {
       userId: req.user.userId,
