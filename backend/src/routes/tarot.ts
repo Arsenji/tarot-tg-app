@@ -702,14 +702,19 @@ router.get('/history', async (req: any, res) => {
       .lean();
     logger.info('Sample readings from database (first 5)', {
       sampleReadings: allReadingsSample.map((r: any) => ({
-        _id: r._id,
-        userId: r.userId,
+        _id: r._id?.toString(),
+        userId: r.userId?.toString(),
+        userIdType: typeof r.userId,
+        userIdValue: r.userId,
+        userIdMatches: r.userId?.toString() === req.user.userId?.toString(),
         telegramId: r.telegramId,
         telegramIdType: typeof r.telegramId,
         telegramIdValue: r.telegramId,
         readingType: r.readingType,
         createdAt: r.createdAt
-      }))
+      })),
+      requestedUserId: req.user.userId,
+      requestedUserIdType: typeof req.user.userId
     });
     
     // Пробуем найти записи по обоим полям
