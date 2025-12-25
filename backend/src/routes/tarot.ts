@@ -157,6 +157,13 @@ router.post('/daily-advice', async (req: any, res) => {
     // Сохраняем расклад
     try {
       if (interpretation.interpretation && interpretation.interpretation.trim().length > 0) {
+        logger.info('Attempting to save daily-advice reading', {
+          userId: req.user.userId,
+          telegramId: userId,
+          cardName: randomCard,
+          hasInterpretation: !!interpretation.interpretation
+        });
+        
         const saved = await openAIService.saveReading(
           req.user.userId,
           userId,
@@ -172,15 +179,31 @@ router.post('/daily-advice', async (req: any, res) => {
           interpretation.interpretation
         );
         if (!saved) {
-          logger.warn('Failed to save daily-advice reading', { userId, telegramId: userId });
+          logger.warn('Failed to save daily-advice reading', { 
+            userId: req.user.userId, 
+            telegramId: userId,
+            cardName: randomCard
+          });
         } else {
-          logger.info('Daily-advice reading saved successfully', { userId, telegramId: userId });
+          logger.info('Daily-advice reading saved successfully', { 
+            userId: req.user.userId, 
+            telegramId: userId,
+            cardName: randomCard
+          });
         }
       } else {
-        logger.warn('Skipping save: interpretation is empty', { userId, telegramId: userId });
+        logger.warn('Skipping save: interpretation is empty', { 
+          userId: req.user.userId, 
+          telegramId: userId 
+        });
       }
     } catch (saveError) {
-      logger.error('Error saving daily-advice reading', { error: saveError, userId, telegramId: userId });
+      logger.error('Error saving daily-advice reading', { 
+        error: saveError, 
+        userId: req.user.userId, 
+        telegramId: userId,
+        errorMessage: saveError instanceof Error ? saveError.message : String(saveError)
+      });
     }
 
     // Формируем ответ в формате, который ожидает фронтенд
@@ -319,6 +342,13 @@ router.post('/three-cards', async (req: any, res) => {
     // Сохраняем расклад (используем английские названия для сохранения)
     try {
       if (interpretation.interpretation && interpretation.interpretation.trim().length > 0) {
+        logger.info('Attempting to save three-cards reading', {
+          userId: req.user.userId,
+          telegramId: userId,
+          cardsCount: selectedCardsForAPI.length,
+          hasInterpretation: !!interpretation.interpretation
+        });
+        
         const saved = await openAIService.saveReading(
           req.user.userId,
           userId,
@@ -330,15 +360,31 @@ router.post('/three-cards', async (req: any, res) => {
           interpretation.interpretation
         );
         if (!saved) {
-          logger.warn('Failed to save three-cards reading', { userId, telegramId: userId });
+          logger.warn('Failed to save three-cards reading', { 
+            userId: req.user.userId, 
+            telegramId: userId,
+            cardsCount: selectedCardsForAPI.length
+          });
         } else {
-          logger.info('Three-cards reading saved successfully', { userId, telegramId: userId });
+          logger.info('Three-cards reading saved successfully', { 
+            userId: req.user.userId, 
+            telegramId: userId,
+            cardsCount: selectedCardsForAPI.length
+          });
         }
       } else {
-        logger.warn('Skipping save: interpretation is empty', { userId, telegramId: userId });
+        logger.warn('Skipping save: interpretation is empty', { 
+          userId: req.user.userId, 
+          telegramId: userId 
+        });
       }
     } catch (saveError) {
-      logger.error('Error saving three-cards reading', { error: saveError, userId, telegramId: userId });
+      logger.error('Error saving three-cards reading', { 
+        error: saveError, 
+        userId: req.user.userId, 
+        telegramId: userId,
+        errorMessage: saveError instanceof Error ? saveError.message : String(saveError)
+      });
     }
 
     res.json({
@@ -464,6 +510,13 @@ router.post('/yes-no', async (req: any, res) => {
     // Сохраняем расклад
     try {
       if (interpretationText && interpretationText.trim().length > 0) {
+        logger.info('Attempting to save yes-no reading', {
+          userId: req.user.userId,
+          telegramId: userId,
+          cardName: randomCard,
+          hasInterpretation: !!interpretationText
+        });
+        
         const saved = await openAIService.saveReading(
           req.user.userId,
           userId,
@@ -475,15 +528,31 @@ router.post('/yes-no', async (req: any, res) => {
           interpretationText
         );
         if (!saved) {
-          logger.warn('Failed to save yes-no reading', { userId, telegramId: userId });
+          logger.warn('Failed to save yes-no reading', { 
+            userId: req.user.userId, 
+            telegramId: userId,
+            cardName: randomCard
+          });
         } else {
-          logger.info('Yes-no reading saved successfully', { userId, telegramId: userId });
+          logger.info('Yes-no reading saved successfully', { 
+            userId: req.user.userId, 
+            telegramId: userId,
+            cardName: randomCard
+          });
         }
       } else {
-        logger.warn('Skipping save: interpretation is empty', { userId, telegramId: userId });
+        logger.warn('Skipping save: interpretation is empty', { 
+          userId: req.user.userId, 
+          telegramId: userId 
+        });
       }
     } catch (saveError) {
-      logger.error('Error saving yes-no reading', { error: saveError, userId, telegramId: userId });
+      logger.error('Error saving yes-no reading', { 
+        error: saveError, 
+        userId: req.user.userId, 
+        telegramId: userId,
+        errorMessage: saveError instanceof Error ? saveError.message : String(saveError)
+      });
     }
 
     // Отмечаем использование бесплатного Yes/No
@@ -526,13 +595,39 @@ router.get('/history', async (req: any, res) => {
     const userId = req.user.telegramId;
     const { page = 1, limit = 10 } = req.query;
     
+    logger.info('Fetching history', {
+      userId: req.user.userId,
+      telegramId: userId,
+      page,
+      limit
+    });
+    
     const skip = (parseInt(page as string) - 1) * parseInt(limit as string);
+    
+    // Проверяем подключение к БД
+    if (mongoose.connection.readyState !== 1) {
+      logger.error('MongoDB not connected when fetching history', {
+        readyState: mongoose.connection.readyState,
+        telegramId: userId
+      });
+      return res.status(500).json({
+        success: false,
+        error: 'Database connection error'
+      });
+    }
     
     const readings = await TarotReading.find({ telegramId: userId })
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit as string))
       .lean();
+    
+    logger.info('History query result', {
+      userId: req.user.userId,
+      telegramId: userId,
+      readingsFound: readings.length,
+      query: { telegramId: userId }
+    });
 
     // Преобразуем данные в формат, который ожидает фронтенд
     const transformedReadings = readings.map((reading: any) => {
