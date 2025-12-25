@@ -632,6 +632,10 @@ router.get('/history', async (req: any, res) => {
     logger.info('Fetching history', {
       userId: req.user.userId,
       telegramId: userId,
+      userIdType: typeof req.user.userId,
+      telegramIdType: typeof userId,
+      userIdString: String(req.user.userId),
+      telegramIdString: String(userId),
       page,
       limit
     });
