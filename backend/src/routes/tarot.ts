@@ -722,7 +722,35 @@ router.get('/history', async (req: any, res) => {
     
     // ИСПРАВЛЕНИЕ: Используем записи по userId, если по telegramId ничего не найдено
     // Это нужно для старых записей, которые могли быть сохранены без telegramId
-    const readings = readingsByTelegramId.length > 0 ? readingsByTelegramId : readingsByUserId;
+    // Также обновляем старые записи, добавляя telegramId для будущих запросов
+    let readings = readingsByTelegramId.length > 0 ? readingsByTelegramId : readingsByUserId;
+    
+    // Если нашли записи по userId, но у них нет telegramId, обновляем их
+    if (readingsByUserId.length > 0 && readingsByTelegramId.length === 0) {
+      logger.info('Found readings by userId without telegramId, updating them', {
+        count: readingsByUserId.length,
+        userId: req.user.userId,
+        telegramId: userId
+      });
+      
+      // Обновляем старые записи, добавляя telegramId
+      try {
+        await TarotReading.updateMany(
+          { userId: req.user.userId, telegramId: { $exists: false } },
+          { $set: { telegramId: userId } }
+        );
+        logger.info('Updated old readings with telegramId', {
+          userId: req.user.userId,
+          telegramId: userId
+        });
+      } catch (updateError) {
+        logger.error('Failed to update old readings with telegramId', {
+          error: updateError,
+          userId: req.user.userId,
+          telegramId: userId
+        });
+      }
+    }
     
     logger.info('History query result', {
       userId: req.user.userId,
