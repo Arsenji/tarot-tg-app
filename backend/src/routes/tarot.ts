@@ -666,12 +666,33 @@ router.get('/history', async (req: any, res) => {
     });
     
     // Также проверяем по userId (на случай, если сохранялось с другим полем)
-    const countByUserId = await TarotReading.countDocuments({ userId: req.user.userId });
+    // Пробуем найти по userId разными способами
+    let countByUserId = 0;
+    try {
+      // Пробуем как строку
+      countByUserId = await TarotReading.countDocuments({ userId: req.user.userId });
+      
+      // Если не нашли, пробуем как ObjectId
+      if (countByUserId === 0 && Types.ObjectId.isValid(req.user.userId)) {
+        countByUserId = await TarotReading.countDocuments({ 
+          userId: new Types.ObjectId(req.user.userId) 
+        });
+      }
+    } catch (countError) {
+      logger.error('Error counting readings by userId', {
+        error: countError,
+        userId: req.user.userId,
+        userIdType: typeof req.user.userId
+      });
+    }
+    
     logger.info('History count by userId', {
       userId: req.user.userId,
       telegramId: userId,
       countByUserId,
-      query: { userId: req.user.userId }
+      query: { userId: req.user.userId },
+      userIdType: typeof req.user.userId,
+      isValidObjectId: Types.ObjectId.isValid(req.user.userId)
     });
     
     // Пробуем найти все записи без фильтра для отладки (только первые 5)
