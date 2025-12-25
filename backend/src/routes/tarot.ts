@@ -759,6 +759,14 @@ router.get('/history', async (req: any, res) => {
     // Также обновляем старые записи, добавляя telegramId для будущих запросов
     let readings = readingsByTelegramId.length > 0 ? readingsByTelegramId : readingsByUserId;
     
+    logger.info('History readings selection', {
+      readingsByTelegramIdCount: readingsByTelegramId.length,
+      readingsByUserIdCount: readingsByUserId.length,
+      finalReadingsCount: readings.length,
+      userId: req.user.userId,
+      telegramId: userId
+    });
+    
     // Если нашли записи по userId, но у них нет telegramId, обновляем их
     if (readingsByUserId.length > 0 && readingsByTelegramId.length === 0) {
       logger.info('Found readings by userId without telegramId, updating them', {
@@ -769,19 +777,30 @@ router.get('/history', async (req: any, res) => {
       
       // Обновляем старые записи, добавляя telegramId
       try {
-        await TarotReading.updateMany(
-          { userId: req.user.userId, telegramId: { $exists: false } },
+        // Пробуем обновить как строку
+        let updateResult = await TarotReading.updateMany(
+          { 
+            $or: [
+              { userId: req.user.userId },
+              { userId: Types.ObjectId.isValid(req.user.userId) ? new Types.ObjectId(req.user.userId) : req.user.userId }
+            ],
+            telegramId: { $exists: false }
+          },
           { $set: { telegramId: userId } }
         );
+        
         logger.info('Updated old readings with telegramId', {
           userId: req.user.userId,
-          telegramId: userId
+          telegramId: userId,
+          matchedCount: updateResult.matchedCount,
+          modifiedCount: updateResult.modifiedCount
         });
       } catch (updateError) {
         logger.error('Failed to update old readings with telegramId', {
           error: updateError,
           userId: req.user.userId,
-          telegramId: userId
+          telegramId: userId,
+          errorMessage: updateError instanceof Error ? updateError.message : String(updateError)
         });
       }
     }
