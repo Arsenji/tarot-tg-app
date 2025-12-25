@@ -627,7 +627,8 @@ router.post('/yes-no', async (req: any, res) => {
 router.get('/history', async (req: any, res) => {
   try {
     const userId = req.user.telegramId;
-    const { page = 1, limit = 10 } = req.query;
+    // Увеличиваем лимит по умолчанию до 50, чтобы показывать больше записей
+    const { page = 1, limit = 50 } = req.query;
     
     logger.info('Fetching history', {
       userId: req.user.userId,
