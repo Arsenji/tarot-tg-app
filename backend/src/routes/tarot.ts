@@ -726,28 +726,64 @@ router.get('/history', async (req: any, res) => {
       .lean();
     
     // Пробуем найти по userId (как строка и как ObjectId)
+    // Используем $or для поиска по обоим вариантам одновременно
     let readingsByUserId: any[] = [];
     try {
-      // Пробуем как строку
+      // Сначала пробуем как строку
       readingsByUserId = await TarotReading.find({ userId: req.user.userId })
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(parseInt(limit as string))
         .lean();
       
+      logger.info('Readings found by userId (as string)', {
+        count: readingsByUserId.length,
+        userId: req.user.userId,
+        userIdType: typeof req.user.userId
+      });
+      
       // Если не нашли, пробуем как ObjectId
       if (readingsByUserId.length === 0 && Types.ObjectId.isValid(req.user.userId)) {
-        readingsByUserId = await TarotReading.find({ userId: new Types.ObjectId(req.user.userId) })
+        const objectIdReadings = await TarotReading.find({ userId: new Types.ObjectId(req.user.userId) })
           .sort({ createdAt: -1 })
           .skip(skip)
           .limit(parseInt(limit as string))
           .lean();
+        
+        logger.info('Readings found by userId (as ObjectId)', {
+          count: objectIdReadings.length,
+          userId: req.user.userId,
+          userIdType: typeof req.user.userId
+        });
+        
+        readingsByUserId = objectIdReadings;
+      }
+      
+      // Если все еще не нашли, пробуем найти через $or с обоими вариантами
+      if (readingsByUserId.length === 0) {
+        const orQuery: any[] = [{ userId: req.user.userId }];
+        if (Types.ObjectId.isValid(req.user.userId)) {
+          orQuery.push({ userId: new Types.ObjectId(req.user.userId) });
+        }
+        
+        readingsByUserId = await TarotReading.find({ $or: orQuery })
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(parseInt(limit as string))
+          .lean();
+        
+        logger.info('Readings found by userId (using $or)', {
+          count: readingsByUserId.length,
+          userId: req.user.userId,
+          orQuery
+        });
       }
     } catch (userIdError) {
       logger.error('Error finding readings by userId', {
         error: userIdError,
         userId: req.user.userId,
-        userIdType: typeof req.user.userId
+        userIdType: typeof req.user.userId,
+        errorMessage: userIdError instanceof Error ? userIdError.message : String(userIdError)
       });
     }
     
