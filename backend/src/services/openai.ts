@@ -396,8 +396,28 @@ class OpenAIService {
         readingType: request.readingType,
         readingId: savedReading._id.toString(),
         createdAt: savedReading.createdAt,
-        cardsCount: savedReading.cards.length
+        cardsCount: savedReading.cards.length,
+        savedUserId: savedReading.userId,
+        savedTelegramId: savedReading.telegramId,
+        savedReadingType: savedReading.readingType
       });
+      
+      // Проверяем, что запись действительно сохранена в БД
+      const verifyReading = await TarotReading.findById(savedReading._id);
+      if (!verifyReading) {
+        logger.error('Reading was not found after save!', {
+          readingId: savedReading._id.toString(),
+          userId,
+          telegramId
+        });
+      } else {
+        logger.info('Reading verified in database', {
+          readingId: savedReading._id.toString(),
+          verifiedUserId: verifyReading.userId,
+          verifiedTelegramId: verifyReading.telegramId
+        });
+      }
+      
       return true;
     } catch (error: any) {
       logger.error('Failed to save tarot reading', {

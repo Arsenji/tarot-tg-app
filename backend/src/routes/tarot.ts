@@ -617,6 +617,30 @@ router.get('/history', async (req: any, res) => {
       });
     }
     
+    // Проверяем, есть ли вообще записи в БД для этого пользователя
+    const totalCount = await TarotReading.countDocuments({ telegramId: userId });
+    logger.info('History total count check', {
+      userId: req.user.userId,
+      telegramId: userId,
+      totalCount,
+      query: { telegramId: userId }
+    });
+    
+    // Также проверяем по userId (на случай, если сохранялось с другим полем)
+    const countByUserId = await TarotReading.countDocuments({ userId: req.user.userId });
+    logger.info('History count by userId', {
+      userId: req.user.userId,
+      telegramId: userId,
+      countByUserId,
+      query: { userId: req.user.userId }
+    });
+    
+    // Пробуем найти все записи без фильтра для отладки
+    const allReadingsCount = await TarotReading.countDocuments({});
+    logger.info('Total readings in database', {
+      totalReadingsInDB: allReadingsCount
+    });
+    
     const readings = await TarotReading.find({ telegramId: userId })
       .sort({ createdAt: -1 })
       .skip(skip)
@@ -627,7 +651,15 @@ router.get('/history', async (req: any, res) => {
       userId: req.user.userId,
       telegramId: userId,
       readingsFound: readings.length,
-      query: { telegramId: userId }
+      totalCount,
+      countByUserId,
+      query: { telegramId: userId },
+      sampleReading: readings.length > 0 ? {
+        _id: readings[0]._id,
+        userId: readings[0].userId,
+        telegramId: readings[0].telegramId,
+        readingType: readings[0].readingType
+      } : null
     });
 
     // Преобразуем данные в формат, который ожидает фронтенд
