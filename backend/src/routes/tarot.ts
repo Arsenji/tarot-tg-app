@@ -1056,6 +1056,33 @@ const handleClarifyingQuestion = async (req: any, res: any) => {
       });
     }
 
+    // Выбираем новую случайную карту для уточняющего вопроса
+    const cards = [
+      'The Fool', 'The Magician', 'The High Priestess', 'The Empress', 'The Emperor',
+      'The Hierophant', 'The Lovers', 'The Chariot', 'Strength', 'The Hermit',
+      'Wheel of Fortune', 'Justice', 'The Hanged Man', 'Death', 'Temperance',
+      'The Devil', 'The Tower', 'The Star', 'The Moon', 'The Sun',
+      'Judgement', 'The World'
+    ];
+    
+    const newRandomCard = cards[Math.floor(Math.random() * cards.length)];
+    const newIsReversed = Math.random() > 0.5;
+    const newRussianCardName = getRussianCardName(newRandomCard);
+    const newImagePath = getCardImagePath(newRandomCard, newIsReversed);
+    
+    // Формируем новую карту для ответа
+    const newCard = {
+      name: newRussianCardName, // Русское название
+      category: 'major',
+      isReversed: newIsReversed,
+      uprightImage: getCardImagePath(newRandomCard, false),
+      reversedImage: getCardImagePath(newRandomCard, true),
+      image: newImagePath,
+      imagePath: newImagePath,
+      uprightInterpretation: newIsReversed ? '' : answer.interpretation,
+      reversedInterpretation: newIsReversed ? answer.interpretation : ''
+    };
+
     // Извлекаем ответ "Да" или "Нет" для yes/no расклада
     let yesNoAnswer: 'Да' | 'Нет' | null = null;
     if (readingType === 'yesno') {
@@ -1067,12 +1094,21 @@ const handleClarifyingQuestion = async (req: any, res: any) => {
       }
     }
 
+    logger.info('Clarifying question - new card selected', {
+      userId,
+      readingType,
+      originalCardName: originalCard?.name,
+      newCardName: newRussianCardName,
+      newCardEnglishName: newRandomCard,
+      newIsReversed
+    });
+
     res.json({
       success: true,
       data: {
         answer: answer.interpretation,
         yesNoAnswer: yesNoAnswer,
-        card: originalCard // Возвращаем ту же карту
+        card: newCard // Возвращаем новую карту для уточняющего вопроса
       }
     });
   } catch (error) {
