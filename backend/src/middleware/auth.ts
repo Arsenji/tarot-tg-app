@@ -17,6 +17,13 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
     const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
     if (!token) {
+      logger.warn('Authentication failed: No token provided', {
+        path: req.path,
+        method: req.method,
+        ip: req.ip,
+        userAgent: req.get('user-agent'),
+        hasAuthHeader: !!authHeader
+      });
       return res.status(401).json({
         success: false,
         error: 'Access token required'
@@ -32,11 +39,60 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
       });
     }
 
-    const decoded = jwt.verify(token, jwtSecret) as any;
+    let decoded: any;
+    try {
+      decoded = jwt.verify(token, jwtSecret) as any;
+    } catch (jwtError) {
+      logger.warn('Authentication failed: JWT verification error', {
+        path: req.path,
+        method: req.method,
+        error: jwtError instanceof Error ? jwtError.message : String(jwtError),
+        tokenPrefix: token.substring(0, 10) + '...'
+      });
+      throw jwtError;
+    }
     
     // Проверяем, существует ли пользователь
     const user = await User.findOne({ telegramId: decoded.telegramId });
     if (!user) {
+      logger.warn('Authentication failed: User not found', {
+        path: req.path,
+        method: req.method,
+        telegramId: decoded.telegramId,
+        decodedPayload: { telegramId: decoded.telegramId, username: decoded.username },
+        adminTelegramId: process.env.ADMIN_TELEGRAM_ID
+      });
+      
+      // Если пользователь не найден, но это администратор - создаем его автоматически
+      const adminTelegramId = process.env.ADMIN_TELEGRAM_ID;
+      const isAdmin = adminTelegramId && decoded.telegramId.toString() === adminTelegramId.toString();
+      
+      if (isAdmin) {
+        logger.info('Admin user not found, creating automatically', { telegramId: decoded.telegramId });
+        try {
+          const newUser = await User.create({
+            telegramId: decoded.telegramId,
+            firstName: decoded.username || 'Admin',
+            lastName: '',
+            username: decoded.username || '',
+            languageCode: 'ru',
+            subscriptionStatus: 0,
+            freeYesNoUsed: false
+          });
+          
+          req.user = {
+            userId: (newUser._id as any).toString(),
+            telegramId: newUser.telegramId,
+            username: newUser.username
+          };
+          
+          logger.info('Admin user created successfully', { userId: newUser._id, telegramId: newUser.telegramId });
+          return next();
+        } catch (createError) {
+          logger.error('Failed to create admin user', { error: createError, telegramId: decoded.telegramId });
+        }
+      }
+      
       return res.status(401).json({
         success: false,
         error: 'User not found'
@@ -51,9 +107,13 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
 
     next();
   } catch (error) {
-    logger.error('Authentication error', { error });
-    
     if (error instanceof jwt.JsonWebTokenError) {
+      logger.warn('Authentication failed: Invalid token', {
+        path: req.path,
+        method: req.method,
+        error: error.message,
+        tokenPrefix: req.headers.authorization?.substring(0, 20) + '...'
+      });
       return res.status(401).json({
         success: false,
         error: 'Invalid token'
@@ -61,11 +121,24 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
     }
     
     if (error instanceof jwt.TokenExpiredError) {
+      logger.warn('Authentication failed: Token expired', {
+        path: req.path,
+        method: req.method,
+        expiredAt: error.expiredAt,
+        tokenPrefix: req.headers.authorization?.substring(0, 20) + '...'
+      });
       return res.status(401).json({
         success: false,
         error: 'Token expired'
       });
     }
+
+    logger.error('Authentication error', { 
+      error,
+      path: req.path,
+      method: req.method,
+      hasAuthHeader: !!req.headers.authorization
+    });
 
     return res.status(500).json({
       success: false,

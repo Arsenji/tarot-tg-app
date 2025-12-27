@@ -32,10 +32,46 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false
 }));
 
-app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-  credentials: true
-}));
+// CORS конфигурация
+const isProduction = process.env.NODE_ENV === 'production';
+const corsOptions = {
+  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    // В production разрешаем только фронтенд
+    if (isProduction) {
+      const allowedOrigins = [
+        'https://tarot-frontend-3.onrender.com',
+        process.env.FRONTEND_URL
+      ].filter(Boolean);
+      
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    } else {
+      // В development разрешаем локальные адреса
+      const allowedOrigins = [
+        'http://localhost:3000',
+        'http://localhost:3001',
+        'http://localhost:3004',
+        'http://127.0.0.1:3004',
+        process.env.FRONTEND_URL
+      ].filter(Boolean);
+      
+      // Разрешаем запросы без origin (например, из Postman)
+      if (!origin || allowedOrigins.includes(origin) || origin.match(/^http:\/\/192\.168\.\d+\.\d+:\d+$/)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+};
+
+app.use(cors(corsOptions));
 
 app.use(morgan('combined'));
 app.use(express.json({ limit: '10mb' }));
@@ -106,10 +142,25 @@ const startServer = async () => {
     
     // Запускаем Telegram бота ПОСЛЕ сервера
     // bot.launch() - блокирующая операция (long polling), но сервер уже запущен
-    await startBot();
+    // Важно: запускаем бота в отдельном промиссе, чтобы ошибки бота не завершали сервер
+    startBot().catch((error) => {
+      logger.error('Failed to start bot, but server is running', { error });
+      // НЕ завершаем процесс - сервер должен работать даже без бота
+    });
   } catch (error) {
     logger.error('Failed to start server', { error });
-    process.exit(1);
+    // Только критические ошибки (например, не удалось подключиться к БД) завершают процесс
+    // Но если есть ALLOW_NO_MONGODB, продолжаем работу
+    if (process.env.ALLOW_NO_MONGODB !== 'true') {
+      process.exit(1);
+    } else {
+      logger.warn('Continuing without database connection');
+      // Запускаем сервер даже без БД
+      app.listen(PORT, '0.0.0.0', () => {
+        console.log(`🚀 Server running on port ${PORT} (without MongoDB)`);
+        logger.info(`HTTP server started on port ${PORT} (without MongoDB)`, { port: PORT, environment: process.env.NODE_ENV });
+      });
+    }
   }
 };
 

@@ -3,6 +3,8 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { LoginRequest, AuthResponse } from '../types';
+import { User } from '../models/User';
+import logger from '../utils/logger';
 
 export class AuthController {
   async login(req: Request, res: Response): Promise<void> {
@@ -94,6 +96,30 @@ export class AuthController {
 
       const telegramUser = JSON.parse(userJson);
       const userId = telegramUser.id;
+
+      // Создаем или обновляем пользователя в БД
+      try {
+        await User.findOneAndUpdate(
+          { telegramId: userId },
+          {
+            telegramId: userId,
+            firstName: telegramUser.first_name || '',
+            lastName: telegramUser.last_name || '',
+            username: telegramUser.username || '',
+            languageCode: telegramUser.language_code || 'ru',
+            // Не сбрасываем subscriptionStatus и freeYesNoUsed при обновлении
+          },
+          { 
+            upsert: true, 
+            new: true,
+            setDefaultsOnInsert: true // Устанавливает значения по умолчанию только при создании
+          }
+        );
+        logger.info('User created/updated via Telegram auth', { userId });
+      } catch (dbError) {
+        logger.error('Database error during Telegram auth', { error: dbError, userId });
+        // Продолжаем выполнение, но пользователь может не быть в БД
+      }
 
       // Генерируем JWT токен для пользователя
       const jwtSecret = process.env.JWT_SECRET || 'fallback-secret';
