@@ -31,7 +31,7 @@ const getMainKeyboard = () => {
     ['Открыть приложение'],
     ['Купить подписку', 'Моя подписка'],
     ['Помощь', 'Оставить отзыв']
-  ]).resize();
+  ]).resize().persistent();
 };
 
 const getStartKeyboard = () => {
