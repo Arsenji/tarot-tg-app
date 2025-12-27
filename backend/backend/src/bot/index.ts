@@ -267,6 +267,9 @@ const initializeBot = () => {
           [Markup.button.webApp('🔮 Открыть приложение', webAppUrl)]
         ])
       );
+      
+      // Возвращаем главное меню после отправки сообщения
+      await ctx.reply('Выберите действие:', getMainKeyboard());
     } catch (error) {
       logger.error('Error in "Открыть приложение" handler', { error, userId: ctx.from?.id });
       await ctx.reply('Произошла ошибка. Попробуйте позже.');
@@ -343,9 +346,12 @@ const initializeBot = () => {
       message += 'Нажмите на тариф для покупки:';
 
       await ctx.reply(message, getSubscriptionKeyboard());
+      
+      // Возвращаем главное меню после отправки сообщения
+      await ctx.reply('Или выберите другое действие:', getMainKeyboard());
     } catch (error) {
       logger.error('Error in "Купить подписку" handler', { error, userId: ctx.from?.id });
-      await ctx.reply('Произошла ошибка. Попробуйте позже.');
+      await ctx.reply('Произошла ошибка. Попробуйте позже.', getMainKeyboard());
     }
   });
 
@@ -516,9 +522,12 @@ const initializeBot = () => {
           [Markup.button.callback('Продлить подписку', 'extend_subscription')]
         ])
       );
+      
+      // Возвращаем главное меню после отправки сообщения
+      await ctx.reply('Выберите действие:', getMainKeyboard());
     } catch (error) {
       logger.error('Error in "Моя подписка" handler', { error, userId: ctx.from?.id });
-      await ctx.reply('Произошла ошибка. Попробуйте позже.');
+      await ctx.reply('Произошла ошибка. Попробуйте позже.', getMainKeyboard());
     }
   });
 
@@ -539,7 +548,7 @@ const initializeBot = () => {
       );
     } catch (error) {
       logger.error('Error in "Помощь" handler', { error, userId: ctx.from?.id });
-      await ctx.reply('Произошла ошибка. Попробуйте позже.');
+      await ctx.reply('Произошла ошибка. Попробуйте позже.', getMainKeyboard());
     }
   });
 
@@ -560,7 +569,7 @@ const initializeBot = () => {
       );
     } catch (error) {
       logger.error('Error in "Оставить отзыв" handler', { error, userId: ctx.from?.id });
-      await ctx.reply('Произошла ошибка. Попробуйте позже.');
+      await ctx.reply('Произошла ошибка. Попробуйте позже.', getMainKeyboard());
     }
   });
 
