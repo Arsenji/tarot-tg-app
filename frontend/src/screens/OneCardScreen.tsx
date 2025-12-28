@@ -2,20 +2,14 @@
 
 import { motion, AnimatePresence } from 'motion/react';
 import { Button } from '@/components/ui/button';
-import { FloatingCard } from '@/components/FloatingCard';
 import { ArrowLeft, Sparkles, RefreshCw } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { ImageWithFallback } from '@/components/figma/ImageWithFallback';
 import { tarotCards } from '@/data/tarotCards';
 import { apiService } from '@/services/api';
 
-// Фоновые карты для атмосферы
-const backgroundCards = [
-  {
-    src: "https://images.unsplash.com/photo-1632986248827-5bfc9101c24d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHx0YXJvdCUyMGNhcmQlMjBteXN0aWNhbCUyMG9ybmF0ZSUyMGRlc2lnbnxlbnwxfHx8fDE3NTc3NjcyNDh8MA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral",
-    alt: "Mystical Tarot Card"
-  }
-];
+// Фоновые карты для атмосферы (убраны внешние ссылки на unsplash для избежания таймаутов)
+const backgroundCards: Array<{ src: string; alt: string }> = [];
 
 interface TarotLoaderProps {
   message?: string;
@@ -257,28 +251,40 @@ export function OneCardScreen({ onBack }: OneCardScreenProps) {
       // Получаем совет от AI
       const response = await apiService.getDailyAdvice();
       
+      // Проверяем, требуется ли подписка
+      if (response.subscriptionRequired) {
+        // Если требуется подписка, возвращаемся на главный экран
+        // Статус подписки обновится автоматически через refreshSubscription
+        onBack();
+        return;
+      }
+      
       if (response.success && response.data) {
         // Преобразуем карту из API в формат локальных карт
         const apiCard = response.data.card;
+        const isReversed = apiCard.isReversed || false;
+        const cardImage = isReversed 
+          ? (apiCard.reversedImage || apiCard.image || '/images/placeholder.png')
+          : (apiCard.uprightImage || apiCard.image || '/images/placeholder.png');
+        
         const localCard = {
           ...apiCard,
-          image: apiCard.image || '/images/placeholder.png'
+          image: cardImage,
+          imagePath: cardImage
         };
         setSelectedCard(localCard);
-        setAiAdvice(response.data.advice);
+        setAiAdvice(response.data.advice || response.data.interpretation || '');
       } else {
-        
-        // Fallback к случайной карте, если API недоступен
-        const randomCard = tarotCards[Math.floor(Math.random() * tarotCards.length)];
-        setSelectedCard(randomCard);
-        setAiAdvice(randomCard.advice);
+        // Если API вернул ошибку, возвращаемся на главный экран
+        console.error('Daily Advice API error:', response.error);
+        onBack();
+        return;
       }
     } catch (error) {
       console.error('Error getting AI advice:', error);
-      // Fallback к случайной карте
-      const randomCard = tarotCards[Math.floor(Math.random() * tarotCards.length)];
-      setSelectedCard(randomCard);
-      setAiAdvice(randomCard.advice);
+      // При ошибке возвращаемся на главный экран
+      onBack();
+      return;
     }
     
     // Ждем минимальное время показа лоадера
@@ -304,14 +310,9 @@ export function OneCardScreen({ onBack }: OneCardScreenProps) {
 
   return (
     <div className="relative min-h-screen bg-gradient-to-b from-slate-900 via-purple-900 to-slate-900 overflow-y-auto">
-      {/* Background with stars */}
+      {/* Background with stars - убрана ссылка на unsplash для избежания таймаутов */}
       <div 
-        className="absolute inset-0 opacity-20"
-        style={{
-          backgroundImage: `url(https://images.unsplash.com/photo-1623489956130-64c5f8e84590?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxzdGFycyUyMG5pZ2h0JTIwc2t5JTIwbWFnaWNhbHxlbnwxfHx8fDE3NTc2NjA3NzR8MA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral)`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-        }}
+        className="absolute inset-0 opacity-20 bg-gradient-to-b from-slate-900 via-purple-900 to-slate-900"
       />
 
       {/* Floating sparkles */}
@@ -359,36 +360,7 @@ export function OneCardScreen({ onBack }: OneCardScreenProps) {
       </div>
 
       {/* Background floating cards */}
-      <FloatingCard
-        src={backgroundCards[0].src}
-        alt={backgroundCards[0].alt}
-        delay={0.5}
-        duration={6}
-        x={5}
-        y={10}
-        rotation={-25}
-        scale={0.3}
-      />
-      <FloatingCard
-        src={backgroundCards[0].src}
-        alt={backgroundCards[0].alt}
-        delay={2}
-        duration={5}
-        x={90}
-        y={15}
-        rotation={30}
-        scale={0.25}
-      />
-      <FloatingCard
-        src={backgroundCards[0].src}
-        alt={backgroundCards[0].alt}
-        delay={1.5}
-        duration={7}
-        x={85}
-        y={75}
-        rotation={-20}
-        scale={0.2}
-      />
+      {/* Убраны фоновые карты с unsplash для избежания таймаутов */}
 
       {/* Main Content */}
       <div className="relative z-10 flex flex-col min-h-screen">
