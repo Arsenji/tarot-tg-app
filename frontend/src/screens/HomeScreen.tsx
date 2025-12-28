@@ -405,6 +405,17 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
   };
 
   const handleOneCardClick = () => {
+    // Проверяем, заблокирована ли кнопка
+    const isDisabled = subscriptionInfo?.hasSubscription 
+      ? false 
+      : ((subscriptionInfo?.remainingDailyAdvice ?? 0) === 0 || !subscriptionInfo?.canUseDailyAdvice);
+    
+    if (isDisabled) {
+      // Если кнопка заблокирована, открываем модальное окно подписки
+      handleOpenSubscriptionModal();
+      return;
+    }
+    
     // Для подписчиков - всегда разрешено
     if (subscriptionInfo?.hasSubscription) {
       onOneCard();
@@ -490,9 +501,10 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
               disabled={subscriptionInfo?.hasSubscription ? false : ((subscriptionInfo?.remainingDailyAdvice ?? 0) === 0 || !subscriptionInfo?.canUseDailyAdvice)}
               className={`w-full h-20 text-white border-2 rounded-3xl shadow-xl transition-all duration-300 backdrop-blur-sm ${
                 subscriptionInfo?.hasSubscription || ((subscriptionInfo?.remainingDailyAdvice ?? 0) > 0 && subscriptionInfo?.canUseDailyAdvice)
-                  ? 'bg-slate-800/50 hover:bg-slate-700/50 border-amber-400/30 hover:border-amber-400/50 hover:shadow-2xl'
-                  : 'bg-slate-800/30 border-slate-600/30 opacity-60 cursor-not-allowed'
+                  ? 'bg-slate-800/50 hover:bg-slate-700/50 border-amber-400/30 hover:border-amber-400/50 hover:shadow-2xl cursor-pointer'
+                  : 'bg-slate-800/30 border-slate-600/30 opacity-60 cursor-not-allowed pointer-events-none'
               }`}
+              style={{ pointerEvents: (subscriptionInfo?.hasSubscription || (subscriptionInfo?.remainingDailyAdvice ?? 0) > 0 && subscriptionInfo?.canUseDailyAdvice) ? 'auto' : 'none' }}
             >
               <div className="flex items-center space-x-6 w-full pl-2">
                 <div className={`p-3 rounded-2xl border flex-shrink-0 ${
