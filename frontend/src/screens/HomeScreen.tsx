@@ -60,9 +60,10 @@ interface HomeScreenProps {
   onOneCard: () => void;
   onYesNo: () => void;
   onThreeCards: () => void;
+  refreshSubscription?: number; // Флаг для принудительного обновления статуса
 }
 
-export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThreeCards }: HomeScreenProps) => {
+export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThreeCards, refreshSubscription }: HomeScreenProps) => {
   const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
   // Устанавливаем дефолтные значения сразу, чтобы кнопки всегда отображались корректно
   const [subscriptionInfo, setSubscriptionInfo] = useState<any>({
@@ -402,7 +403,11 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
   };
 
   const handleOneCardClick = () => {
-    if (subscriptionInfo?.canUseDailyAdvice || subscriptionInfo?.hasSubscription) {
+    // Проверяем как canUseDailyAdvice, так и remainingDailyAdvice
+    const canUse = subscriptionInfo?.canUseDailyAdvice || subscriptionInfo?.hasSubscription;
+    const hasRemaining = subscriptionInfo?.hasSubscription || (subscriptionInfo?.remainingDailyAdvice ?? 0) > 0;
+    
+    if (canUse && hasRemaining) {
       onOneCard();
     } else {
       handleOpenSubscriptionModal();
@@ -476,7 +481,7 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
           >
             <Button
               onClick={handleOneCardClick}
-              disabled={!subscriptionInfo?.canUseDailyAdvice && !subscriptionInfo?.hasSubscription}
+              disabled={(!subscriptionInfo?.canUseDailyAdvice && !subscriptionInfo?.hasSubscription) || (!subscriptionInfo?.hasSubscription && (subscriptionInfo?.remainingDailyAdvice ?? 0) === 0)}
               className={`w-full h-20 text-white border-2 rounded-3xl shadow-xl transition-all duration-300 backdrop-blur-sm ${
                 subscriptionInfo?.canUseDailyAdvice || subscriptionInfo?.hasSubscription
                   ? 'bg-slate-800/50 hover:bg-slate-700/50 border-amber-400/30 hover:border-amber-400/50 hover:shadow-2xl'

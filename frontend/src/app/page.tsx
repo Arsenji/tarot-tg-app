@@ -15,6 +15,7 @@ export default function Home() {
   const [showWelcome, setShowWelcome] = useState(true);
   const [currentScreen, setCurrentScreen] = useState<'main' | 'oneCard' | 'threeCards' | 'yesNo'>('main');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [refreshSubscription, setRefreshSubscription] = useState(0);
 
   useEffect(() => {
     // Инициализируем Telegram WebApp
@@ -394,6 +395,7 @@ export default function Home() {
                 onOneCard={() => setCurrentScreen('oneCard')}
                 onYesNo={() => setCurrentScreen('yesNo')}
                 onThreeCards={() => setCurrentScreen('threeCards')}
+                refreshSubscription={refreshSubscription}
               />
             );
           case 'history':
@@ -412,6 +414,7 @@ export default function Home() {
                 onOneCard={() => setCurrentScreen('oneCard')}
                 onYesNo={() => setCurrentScreen('yesNo')}
                 onThreeCards={() => setCurrentScreen('threeCards')}
+                refreshSubscription={refreshSubscription}
               />
             );
         }
