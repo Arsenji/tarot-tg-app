@@ -283,10 +283,32 @@ router.post('/three-cards', async (req: any, res) => {
     
     // Проверяем подписку
     const subscriptionStatus = await checkSubscriptionStatus(userId);
-    const hasUsedToday = await hasUsedThreeCardsToday(userId);
     
-    logger.info('Three cards subscription check', {
-      userId,
+    // Для пользователей без подписки проверяем, использовали ли они Three Cards сегодня
+    if (!subscriptionStatus.hasSubscription && !isAdmin) {
+      const hasUsedToday = await hasUsedThreeCardsToday(userId);
+      
+      logger.info('Three cards subscription check', {
+        userId,
+        hasSubscription: subscriptionStatus.hasSubscription,
+        isAdmin,
+        hasUsedToday,
+        willAllow: !hasUsedToday
+      });
+      
+      if (hasUsedToday) {
+        return res.status(403).json({
+          success: false,
+          error: 'Three cards reading already used today. Subscription required for unlimited access.',
+          subscriptionRequired: true
+        });
+      }
+      
+      // Отмечаем использование для бесплатных пользователей
+      await markThreeCardsUsed(userId);
+    } else {
+      logger.info('Three cards subscription check', {
+        userId,
       hasSubscription: subscriptionStatus.hasSubscription,
       isAdmin,
       hasUsedToday,
@@ -661,6 +683,21 @@ router.post('/yes-no', async (req: any, res) => {
 router.get('/history', async (req: any, res) => {
   try {
     const userId = req.user.telegramId;
+    
+    // Проверяем подписку - история доступна только для пользователей с подпиской
+    const subscriptionStatus = await checkSubscriptionStatus(userId);
+    const adminTelegramId = process.env.ADMIN_TELEGRAM_ID;
+    const isAdmin = adminTelegramId && userId.toString() === adminTelegramId.toString();
+    
+    if (!subscriptionStatus.hasSubscription && !isAdmin) {
+      logger.info('History access denied - no subscription', { userId });
+      return res.status(403).json({
+        success: false,
+        error: 'History is available only for subscribed users',
+        subscriptionRequired: true
+      });
+    }
+    
     // Увеличиваем лимит по умолчанию до 50, чтобы показывать больше записей
     const { page = 1, limit = 50 } = req.query;
     

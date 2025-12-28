@@ -67,6 +67,18 @@ const UserSchema = new Schema<IUser>({
   lastThreeCardsDate: {
     type: Date,
     default: null
+  },
+  lastDailyAdviceDate: {
+    type: Date,
+    default: null
+  },
+  lastYesNoDate: {
+    type: Date,
+    default: null
+  },
+  lastThreeCardsDate: {
+    type: Date,
+    default: null
   }
 }, {
   timestamps: true
