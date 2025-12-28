@@ -110,17 +110,39 @@ class ApiService {
       const duration = performance.now() - startTime;
       const success = response.ok;
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
       const serverResponse = await response.json();
+      console.log('📥 Raw server response:', serverResponse);
+      
+      // Если сервер вернул ошибку с subscriptionRequired, обрабатываем это отдельно
+      if (!response.ok) {
+        // Если требуется подписка, возвращаем это в ответе
+        if (serverResponse.subscriptionRequired) {
+          return {
+            success: false,
+            data: null as T,
+            error: serverResponse.error || `HTTP error! status: ${response.status}`,
+            subscriptionRequired: true,
+            subscriptionInfo: serverResponse.subscriptionInfo
+          };
+        }
+        throw new Error(serverResponse.error || `HTTP error! status: ${response.status}`);
+      }
       
       // Если сервер возвращает структуру { success: true, data: ... }, извлекаем data
       if (serverResponse.success && serverResponse.data) {
         return { 
           success: true, 
           data: serverResponse.data,
+          subscriptionRequired: serverResponse.subscriptionRequired,
+          subscriptionInfo: serverResponse.subscriptionInfo
+        };
+      }
+
+      // Если сервер возвращает { success: true, readings: ... } (для истории)
+      if (serverResponse.success && serverResponse.readings) {
+        return { 
+          success: true, 
+          data: { readings: serverResponse.readings } as T,
           subscriptionRequired: serverResponse.subscriptionRequired,
           subscriptionInfo: serverResponse.subscriptionInfo
         };
@@ -188,7 +210,9 @@ class ApiService {
   }
 
   async getHistory(): Promise<ApiResponse<{ readings: TarotReading[] }>> {
-    return this.request<{ readings: TarotReading[] }>('/api/tarot/history');
+    const response = await this.request<{ readings: TarotReading[] }>('/api/tarot/history');
+    console.log('📚 History API response:', response);
+    return response;
   }
 
   async getSubscriptionStatus(userId: string): Promise<ApiResponse<{ subscriptionInfo: any }>> {
@@ -199,6 +223,29 @@ class ApiService {
     return this.request<any>('/api/subscription/generate-payment', {
       method: 'POST',
       body: JSON.stringify({ spreadType }),
+    });
+  }
+
+  async getClarifyingAnswer(
+    clarifyingQuestion: string,
+    originalCard: any,
+    originalInterpretation: string,
+    readingType: string,
+    readingId?: string,
+    originalQuestion?: string
+  ): Promise<ApiResponse<{ answer: string; yesNoAnswer?: 'Да' | 'Нет'; card?: any }>> {
+    // Убеждаемся, что originalQuestion всегда передается
+    const finalOriginalQuestion = originalQuestion || clarifyingQuestion;
+    
+    return this.request<{ answer: string; yesNoAnswer?: 'Да' | 'Нет'; card?: any }>('/api/tarot/clarifying-question', {
+      method: 'POST',
+      body: JSON.stringify({
+        clarifyingQuestion,
+        originalQuestion: finalOriginalQuestion,
+        originalCard,
+        originalInterpretation,
+        readingType
+      }),
     });
   }
 }

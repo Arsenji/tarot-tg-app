@@ -317,23 +317,12 @@ router.post('/three-cards', async (req: any, res) => {
         });
       }
       
-      // Отмечаем использование для бесплатных пользователей
-      await markThreeCardsUsed(userId);
     } else {
       logger.info('Three cards subscription check', {
         userId,
-      hasSubscription: subscriptionStatus.hasSubscription,
-      isAdmin,
-      hasUsedToday,
-      willAllow: subscriptionStatus.hasSubscription || isAdmin || !hasUsedToday
-    });
-    
-    // Для бесплатных пользователей: 1 раз в день
-    if (!subscriptionStatus.hasSubscription && !isAdmin && hasUsedToday) {
-      return res.status(403).json({
-        success: false,
-        error: 'Three cards reading already used today. Subscription required for unlimited access.',
-        subscriptionRequired: true
+        hasSubscription: subscriptionStatus.hasSubscription,
+        isAdmin,
+        willAllow: true
       });
     }
 
