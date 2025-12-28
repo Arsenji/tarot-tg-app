@@ -478,8 +478,8 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
         <div className="w-full max-w-sm space-y-4 mt-8">
           {/* One Card Button */}
           <motion.div 
-            whileHover={{ scale: subscriptionInfo?.canUseDailyAdvice || subscriptionInfo?.hasSubscription ? 1.02 : 1 }} 
-            whileTap={{ scale: subscriptionInfo?.canUseDailyAdvice || subscriptionInfo?.hasSubscription ? 0.98 : 1 }}
+            whileHover={{ scale: (subscriptionInfo?.hasSubscription || (subscriptionInfo?.remainingDailyAdvice ?? 0) > 0 && subscriptionInfo?.canUseDailyAdvice) ? 1.02 : 1 }} 
+            whileTap={{ scale: (subscriptionInfo?.hasSubscription || (subscriptionInfo?.remainingDailyAdvice ?? 0) > 0 && subscriptionInfo?.canUseDailyAdvice) ? 0.98 : 1 }}
             className="relative"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -489,18 +489,18 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
               onClick={handleOneCardClick}
               disabled={subscriptionInfo?.hasSubscription ? false : ((subscriptionInfo?.remainingDailyAdvice ?? 0) === 0 || !subscriptionInfo?.canUseDailyAdvice)}
               className={`w-full h-20 text-white border-2 rounded-3xl shadow-xl transition-all duration-300 backdrop-blur-sm ${
-                subscriptionInfo?.canUseDailyAdvice || subscriptionInfo?.hasSubscription
+                subscriptionInfo?.hasSubscription || ((subscriptionInfo?.remainingDailyAdvice ?? 0) > 0 && subscriptionInfo?.canUseDailyAdvice)
                   ? 'bg-slate-800/50 hover:bg-slate-700/50 border-amber-400/30 hover:border-amber-400/50 hover:shadow-2xl'
-                  : 'bg-slate-800/30 border-slate-600/30 opacity-60'
+                  : 'bg-slate-800/30 border-slate-600/30 opacity-60 cursor-not-allowed'
               }`}
             >
               <div className="flex items-center space-x-6 w-full pl-2">
                 <div className={`p-3 rounded-2xl border flex-shrink-0 ${
-                  subscriptionInfo?.canUseDailyAdvice || subscriptionInfo?.hasSubscription
+                  subscriptionInfo?.hasSubscription || ((subscriptionInfo?.remainingDailyAdvice ?? 0) > 0 && subscriptionInfo?.canUseDailyAdvice)
                     ? 'bg-amber-600/20 border-amber-400/30'
                     : 'bg-slate-600/20 border-slate-500/30'
                 }`}>
-                  {subscriptionInfo?.canUseDailyAdvice || subscriptionInfo?.hasSubscription ? (
+                  {subscriptionInfo?.hasSubscription || ((subscriptionInfo?.remainingDailyAdvice ?? 0) > 0 && subscriptionInfo?.canUseDailyAdvice) ? (
                     <SparklesIcon className="w-6 h-6 text-amber-400" />
                   ) : (
                     <Lock className="w-6 h-6 text-slate-400" />
@@ -508,10 +508,10 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
                 </div>
                 <div className="text-left flex-1">
                   <div className={`text-lg font-semibold ${
-                    subscriptionInfo?.canUseDailyAdvice || subscriptionInfo?.hasSubscription ? 'text-white' : 'text-slate-400'
+                    subscriptionInfo?.hasSubscription || ((subscriptionInfo?.remainingDailyAdvice ?? 0) > 0 && subscriptionInfo?.canUseDailyAdvice) ? 'text-white' : 'text-slate-400'
                   }`}>Одна карта</div>
                   <div className={`text-sm ${
-                    subscriptionInfo?.canUseDailyAdvice || subscriptionInfo?.hasSubscription ? 'text-gray-300' : 'text-slate-500'
+                    subscriptionInfo?.hasSubscription || ((subscriptionInfo?.remainingDailyAdvice ?? 0) > 0 && subscriptionInfo?.canUseDailyAdvice) ? 'text-gray-300' : 'text-slate-500'
                   }`}>Совет дня</div>
                   {!subscriptionInfo?.hasSubscription && (
                     <div className="text-xs text-amber-400 mt-1">
