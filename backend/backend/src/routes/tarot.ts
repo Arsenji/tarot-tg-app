@@ -999,19 +999,21 @@ router.get('/subscription-status', async (req: any, res) => {
     
     // Проверяем подписку
     const subscriptionStatus = await checkSubscriptionStatus(userId);
-    const hasUsedFreeYesNoValue = await hasUsedFreeYesNo(userId);
+    const hasUsedDailyAdviceToday = await hasUsedDailyAdviceToday(userId);
+    const hasUsedYesNoToday = await hasUsedFreeYesNo(userId);
+    const hasUsedThreeCardsToday = await hasUsedThreeCardsToday(userId);
     
     // Формируем ответ в формате, который ожидает фронтенд
     // Администратор всегда имеет доступ ко всем раскладам
-    // Для остальных пользователей проверяем подписку
+    // Для бесплатных пользователей: 1 раз в день для каждого типа
     const subscriptionInfo = {
-      hasSubscription: subscriptionStatus.hasSubscription || isAdmin, // Админ всегда имеет подписку
-      canUseDailyAdvice: subscriptionStatus.hasSubscription || isAdmin || true, // Разрешаем всем (временно для отладки)
-      canUseYesNo: subscriptionStatus.hasSubscription || isAdmin || !hasUsedFreeYesNoValue || true, // Разрешаем всем (временно для отладки)
-      canUseThreeCards: subscriptionStatus.hasSubscription || isAdmin || true, // Разрешаем всем (временно для отладки)
-      remainingDailyAdvice: isAdmin ? -1 : (subscriptionStatus.hasSubscription ? -1 : 0), // -1 означает неограниченно
-      remainingYesNo: isAdmin ? -1 : (subscriptionStatus.hasSubscription ? -1 : (hasUsedFreeYesNoValue ? 0 : 1)),
-      remainingThreeCards: isAdmin ? -1 : (subscriptionStatus.hasSubscription ? -1 : 0),
+      hasSubscription: subscriptionStatus.hasSubscription || isAdmin,
+      canUseDailyAdvice: subscriptionStatus.hasSubscription || isAdmin || !hasUsedDailyAdviceToday,
+      canUseYesNo: subscriptionStatus.hasSubscription || isAdmin || !hasUsedYesNoToday,
+      canUseThreeCards: subscriptionStatus.hasSubscription || isAdmin || !hasUsedThreeCardsToday,
+      remainingDailyAdvice: isAdmin ? -1 : (subscriptionStatus.hasSubscription ? -1 : (hasUsedDailyAdviceToday ? 0 : 1)),
+      remainingYesNo: isAdmin ? -1 : (subscriptionStatus.hasSubscription ? -1 : (hasUsedYesNoToday ? 0 : 1)),
+      remainingThreeCards: isAdmin ? -1 : (subscriptionStatus.hasSubscription ? -1 : (hasUsedThreeCardsToday ? 0 : 1)),
     };
     
     logger.info('Subscription info response', {
