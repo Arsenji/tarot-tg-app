@@ -120,18 +120,31 @@ router.post('/daily-advice', async (req: any, res) => {
     // Проверяем подписку
     const subscriptionStatus = await checkSubscriptionStatus(userId);
     
-    logger.info('Daily advice subscription check', {
-      userId,
-      hasSubscription: subscriptionStatus.hasSubscription,
-      isAdmin,
-      willAllow: subscriptionStatus.hasSubscription || isAdmin
-    });
-    
+    // Для пользователей без подписки проверяем, использовали ли они Daily Advice сегодня
     if (!subscriptionStatus.hasSubscription && !isAdmin) {
-      return res.status(403).json({
-        success: false,
-        error: 'Subscription required',
-        subscriptionRequired: true
+      const hasUsedToday = await hasUsedDailyAdviceToday(userId);
+      
+      logger.info('Daily advice subscription check', {
+        userId,
+        hasSubscription: subscriptionStatus.hasSubscription,
+        isAdmin,
+        hasUsedToday,
+        willAllow: !hasUsedToday
+      });
+      
+      if (hasUsedToday) {
+        return res.status(403).json({
+          success: false,
+          error: 'Daily advice already used today. Subscription required for unlimited access.',
+          subscriptionRequired: true
+        });
+      }
+    } else {
+      logger.info('Daily advice subscription check', {
+        userId,
+        hasSubscription: subscriptionStatus.hasSubscription,
+        isAdmin,
+        willAllow: true
       });
     }
 
