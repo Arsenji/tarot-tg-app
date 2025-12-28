@@ -274,9 +274,12 @@ export function OneCardScreen({ onBack }: OneCardScreenProps) {
         };
         setSelectedCard(localCard);
         setAiAdvice(response.data.advice || response.data.interpretation || '');
+        // После успешного получения совета обновляем статус подписки
+        // Это будет сделано через refreshSubscription при возврате на главный экран
       } else {
         // Если API вернул ошибку, возвращаемся на главный экран
         console.error('Daily Advice API error:', response.error);
+        setIsDrawing(false);
         onBack();
         return;
       }
