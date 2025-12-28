@@ -101,10 +101,17 @@ const initializeBot = () => {
   bot.start(async (ctx: Context) => {
     try {
       const userId = ctx.from?.id;
-      logger.info('Received /start command', { userId, username: ctx.from?.username });
+      logger.info('=== /start COMMAND RECEIVED ===', { 
+        userId, 
+        username: ctx.from?.username,
+        firstName: ctx.from?.first_name,
+        chatId: ctx.chat?.id,
+        messageId: ctx.message?.message_id
+      });
       
       if (!userId) {
         logger.warn('No userId in /start command');
+        await ctx.reply('Ошибка: не удалось определить пользователя. Попробуйте позже.');
         return;
       }
 
@@ -154,8 +161,9 @@ const initializeBot = () => {
         welcomeMessage += 'Выберите действие:';
         
         // Сразу показываем главное меню
+        logger.info('Sending welcome message with keyboard', { userId });
         await ctx.reply(welcomeMessage, getMainKeyboard());
-        logger.info('Reply sent in /start with main menu', { userId });
+        logger.info('✅ Reply sent in /start with main menu', { userId });
       } catch (replyError) {
         logger.error('Error sending reply in /start', { error: replyError, userId });
         throw replyError;
