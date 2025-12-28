@@ -1056,14 +1056,19 @@ router.get('/subscription-status', async (req: any, res) => {
     // Формируем ответ в формате, который ожидает фронтенд
     // Администратор всегда имеет доступ ко всем раскладам
     // Для бесплатных пользователей: 1 раз в день для каждого типа
+    const remainingDailyAdvice = isAdmin ? -1 : (subscriptionStatus.hasSubscription ? -1 : (hasUsedDailyAdviceToday ? 0 : 1));
+    const remainingYesNo = isAdmin ? -1 : (subscriptionStatus.hasSubscription ? -1 : (hasUsedYesNoToday ? 0 : 1));
+    const remainingThreeCards = isAdmin ? -1 : (subscriptionStatus.hasSubscription ? -1 : (hasUsedThreeCardsToday ? 0 : 1));
+    
     const subscriptionInfo = {
       hasSubscription: subscriptionStatus.hasSubscription || isAdmin,
-      canUseDailyAdvice: subscriptionStatus.hasSubscription || isAdmin || !hasUsedDailyAdviceToday,
-      canUseYesNo: subscriptionStatus.hasSubscription || isAdmin || !hasUsedYesNoToday,
-      canUseThreeCards: subscriptionStatus.hasSubscription || isAdmin || !hasUsedThreeCardsToday,
-      remainingDailyAdvice: isAdmin ? -1 : (subscriptionStatus.hasSubscription ? -1 : (hasUsedDailyAdviceToday ? 0 : 1)),
-      remainingYesNo: isAdmin ? -1 : (subscriptionStatus.hasSubscription ? -1 : (hasUsedYesNoToday ? 0 : 1)),
-      remainingThreeCards: isAdmin ? -1 : (subscriptionStatus.hasSubscription ? -1 : (hasUsedThreeCardsToday ? 0 : 1)),
+      // canUseDailyAdvice должен быть false если remainingDailyAdvice === 0
+      canUseDailyAdvice: subscriptionStatus.hasSubscription || isAdmin || remainingDailyAdvice > 0,
+      canUseYesNo: subscriptionStatus.hasSubscription || isAdmin || remainingYesNo > 0,
+      canUseThreeCards: subscriptionStatus.hasSubscription || isAdmin || remainingThreeCards > 0,
+      remainingDailyAdvice,
+      remainingYesNo,
+      remainingThreeCards,
     };
     
     logger.info('Subscription info response', {
