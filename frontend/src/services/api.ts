@@ -115,6 +115,16 @@ class ApiService {
       
       // Если сервер вернул ошибку с subscriptionRequired, обрабатываем это отдельно
       if (!response.ok) {
+        // Если статус 403, это может быть связано с подпиской
+        if (response.status === 403) {
+          return {
+            success: false,
+            data: null as T,
+            error: serverResponse.error || `HTTP error! status: ${response.status}`,
+            subscriptionRequired: serverResponse.subscriptionRequired !== false, // По умолчанию true для 403
+            subscriptionInfo: serverResponse.subscriptionInfo
+          };
+        }
         // Если требуется подписка, возвращаем это в ответе
         if (serverResponse.subscriptionRequired) {
           return {
