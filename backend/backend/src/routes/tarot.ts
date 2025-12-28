@@ -169,18 +169,29 @@ router.post('/daily-advice', async (req: any, res) => {
       isReversed
     });
 
+    // Если ИИ не ответил, возвращаем ошибку БЕЗ отметки использования
     if (!interpretation.success || !interpretation.interpretation) {
+      logger.error('Daily advice: Failed to get card interpretation', {
+        userId,
+        isAdmin,
+        hasSubscription: subscriptionStatus.hasSubscription,
+        cardName: russianCardName,
+        error: interpretation.error
+      });
       return res.status(500).json({
         success: false,
-        error: 'Failed to get card interpretation'
+        error: 'Failed to get card interpretation',
+        subscriptionRequired: false // Не требуется подписка, это техническая ошибка
       });
     }
+    
     const imagePath = getCardImagePath(randomCard, isReversed);
 
-        // Отмечаем использование Daily Advice для бесплатных пользователей
-        if (!subscriptionStatus.hasSubscription && !isAdmin) {
-          await markDailyAdviceUsed(userId);
-        }
+    // Отмечаем использование Daily Advice для бесплатных пользователей ТОЛЬКО после успешного получения интерпретации
+    if (!subscriptionStatus.hasSubscription && !isAdmin) {
+      await markDailyAdviceUsed(userId);
+      logger.info('Daily advice: Marked as used for free user', { userId });
+    }
 
         // Сохраняем расклад ТОЛЬКО для пользователей с подпиской
         try {
