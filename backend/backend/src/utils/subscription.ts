@@ -126,10 +126,14 @@ export async function hasUsedFreeYesNo(telegramId: number): Promise<boolean> {
     const lastDate = new Date(user.lastYesNoDate);
     
     // Нормализуем даты до UTC, чтобы избежать проблем с часовыми поясами
-    const todayUTC = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
-    const lastDateUTC = new Date(Date.UTC(lastDate.getFullYear(), lastDate.getMonth(), lastDate.getDate()));
+    // Используем начало дня в UTC для обеих дат
+    const todayUTC = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+    const lastDateUTC = new Date(Date.UTC(lastDate.getUTCFullYear(), lastDate.getUTCMonth(), lastDate.getUTCDate()));
     
     const isSameDay = todayUTC.getTime() === lastDateUTC.getTime();
+    
+    // Дополнительная проверка: если дата в будущем, считаем что не использовано
+    const isFuture = lastDateUTC.getTime() > todayUTC.getTime();
     
     logger.info('hasUsedFreeYesNo check', { 
       telegramId, 
@@ -137,10 +141,11 @@ export async function hasUsedFreeYesNo(telegramId: number): Promise<boolean> {
       lastDate: lastDateUTC.toISOString(),
       lastYesNoDateRaw: user.lastYesNoDate?.toISOString(),
       isSameDay,
-      willReturn: isSameDay
+      isFuture,
+      willReturn: isSameDay && !isFuture
     });
     
-    return isSameDay;
+    return isSameDay && !isFuture;
   } catch (error) {
     logger.error('Error checking free Yes/No usage', { error, telegramId });
     return false;
@@ -196,10 +201,14 @@ export async function hasUsedDailyAdviceToday(telegramId: number): Promise<boole
     const lastDate = new Date(user.lastDailyAdviceDate);
     
     // Нормализуем даты до UTC, чтобы избежать проблем с часовыми поясами
-    const todayUTC = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
-    const lastDateUTC = new Date(Date.UTC(lastDate.getFullYear(), lastDate.getMonth(), lastDate.getDate()));
+    // Используем начало дня в UTC для обеих дат
+    const todayUTC = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+    const lastDateUTC = new Date(Date.UTC(lastDate.getUTCFullYear(), lastDate.getUTCMonth(), lastDate.getUTCDate()));
     
     const isSameDay = todayUTC.getTime() === lastDateUTC.getTime();
+    
+    // Дополнительная проверка: если дата в будущем, считаем что не использовано
+    const isFuture = lastDateUTC.getTime() > todayUTC.getTime();
     
     logger.info('hasUsedDailyAdviceToday check', { 
       telegramId, 
@@ -207,10 +216,11 @@ export async function hasUsedDailyAdviceToday(telegramId: number): Promise<boole
       lastDate: lastDateUTC.toISOString(),
       lastDailyAdviceDateRaw: user.lastDailyAdviceDate?.toISOString(),
       isSameDay,
-      willReturn: isSameDay
+      isFuture,
+      willReturn: isSameDay && !isFuture
     });
     
-    return isSameDay;
+    return isSameDay && !isFuture;
   } catch (error) {
     logger.error('Error checking daily advice usage', { error, telegramId });
     return false;
@@ -260,10 +270,14 @@ export async function hasUsedThreeCardsToday(telegramId: number): Promise<boolea
     const lastDate = new Date(user.lastThreeCardsDate);
     
     // Нормализуем даты до UTC, чтобы избежать проблем с часовыми поясами
-    const todayUTC = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
-    const lastDateUTC = new Date(Date.UTC(lastDate.getFullYear(), lastDate.getMonth(), lastDate.getDate()));
+    // Используем начало дня в UTC для обеих дат
+    const todayUTC = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+    const lastDateUTC = new Date(Date.UTC(lastDate.getUTCFullYear(), lastDate.getUTCMonth(), lastDate.getUTCDate()));
     
     const isSameDay = todayUTC.getTime() === lastDateUTC.getTime();
+    
+    // Дополнительная проверка: если дата в будущем, считаем что не использовано
+    const isFuture = lastDateUTC.getTime() > todayUTC.getTime();
     
     logger.info('hasUsedThreeCardsToday check', { 
       telegramId, 
@@ -271,10 +285,11 @@ export async function hasUsedThreeCardsToday(telegramId: number): Promise<boolea
       lastDate: lastDateUTC.toISOString(),
       lastThreeCardsDateRaw: user.lastThreeCardsDate?.toISOString(),
       isSameDay,
-      willReturn: isSameDay
+      isFuture,
+      willReturn: isSameDay && !isFuture
     });
     
-    return isSameDay;
+    return isSameDay && !isFuture;
   } catch (error) {
     logger.error('Error checking three cards usage', { error, telegramId });
     return false;
