@@ -14,6 +14,7 @@ import { TarotLoader } from './OneCardScreen';
 
 interface YesNoScreenProps {
   onBack: () => void;
+  onSubscriptionRequired?: () => void;
 }
 
 interface YesNoResult {
@@ -30,10 +31,11 @@ interface YesNoResult {
     number: number;
   };
   answer: string;
+  yesNoAnswer?: 'Да' | 'Нет'; // Поле для точного определения ответа
   interpretation: string;
 }
 
-export function YesNoScreen({ onBack }: YesNoScreenProps) {
+export function YesNoScreen({ onBack, onSubscriptionRequired }: YesNoScreenProps) {
   const [question, setQuestion] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<YesNoResult | null>(null);
@@ -42,6 +44,7 @@ export function YesNoScreen({ onBack }: YesNoScreenProps) {
     question: string;
     answer?: string;
     card?: any;
+    yesNoAnswer?: 'Да' | 'Нет' | null;
     isLoading?: boolean;
   }>>([]);
   const [showClarifyingInput, setShowClarifyingInput] = useState(false);
@@ -56,6 +59,11 @@ export function YesNoScreen({ onBack }: YesNoScreenProps) {
     
     // Проверяем базовые условия
     if (trimmedText.length === 0 || !trimmedText.endsWith('?')) {
+      return false;
+    }
+    
+    // Проверяем минимальную длину (10 символов, как на бэкенде)
+    if (trimmedText.length < 10) {
       return false;
     }
     
@@ -91,10 +99,73 @@ export function YesNoScreen({ onBack }: YesNoScreenProps) {
     setShowValidationError(false);
 
     try {
-      const response = await apiService.getYesNoAnswer(question);
+      const response = await apiService.getYesNoReading(question);
+      
+      // Проверяем, требуется ли подписка
+      if (response.subscriptionRequired) {
+        // Если требуется подписка, возвращаемся на главный экран
+        // Статус подписки обновится автоматически через refreshSubscription
+        if (onSubscriptionRequired) {
+          onSubscriptionRequired();
+        } else {
+          onBack();
+        }
+        return;
+      }
       
       if (response.success && response.data) {
-        setResult(response.data);
+        // Преобразуем формат ответа API в формат, который ожидает компонент
+        const apiData = response.data;
+        
+        // Используем imagePath если он есть, иначе выбираем по isReversed
+        let cardImage = apiData.card.imagePath;
+        if (!cardImage) {
+          cardImage = apiData.card.isReversed 
+            ? apiData.card.reversedImage 
+            : apiData.card.uprightImage;
+        }
+        // Если все еще нет, используем image или uprightImage как fallback
+        if (!cardImage) {
+          cardImage = apiData.card.image || apiData.card.uprightImage;
+        }
+        
+        console.log('Card image path:', cardImage);
+        console.log('Card data:', apiData.card);
+        
+        // Определяем ответ "Да" или "Нет" из API ответа
+        // Берем первую строку ответа для определения
+        let finalAnswer = 'НЕТ';
+        let yesNoAnswer: 'Да' | 'Нет' = 'Нет';
+        
+        if (apiData.answer) {
+          const firstLine = apiData.answer.split('\n')[0].trim().toUpperCase();
+          if (firstLine === 'ДА' || firstLine.startsWith('ДА')) {
+            finalAnswer = 'ДА';
+            yesNoAnswer = 'Да';
+          } else if (firstLine === 'НЕТ' || firstLine.startsWith('НЕТ')) {
+            finalAnswer = 'НЕТ';
+            yesNoAnswer = 'Нет';
+          }
+        }
+        
+        setResult({
+          question,
+          card: {
+            name: apiData.card.name,
+            imagePath: cardImage,
+            keywords: '',
+            meaning: apiData.card.isReversed 
+              ? apiData.card.reversedInterpretation 
+              : apiData.card.uprightInterpretation,
+            advice: apiData.interpretation,
+            isMajorArcana: apiData.card.category === 'major',
+            suit: apiData.card.category,
+            number: 0,
+          },
+          answer: finalAnswer,
+          yesNoAnswer: yesNoAnswer, // Добавляем поле для точного определения
+          interpretation: apiData.interpretation,
+        });
       } else {
         // Проверяем, требуется ли подписка
         
@@ -162,47 +233,64 @@ export function YesNoScreen({ onBack }: YesNoScreenProps) {
     try {
       console.log('Sending clarifying question:', questionText);
       console.log('Card data:', result.card);
+      console.log('Original question:', result.question);
       
       // Используем API для получения ответа от ChatGPT
+      const originalQuestion = result.question || question;
       const response = await apiService.getClarifyingAnswer(
         questionText,
         result.card,
         result.interpretation,
         'yesno',
-        result.readingId // Передаем ID текущего расклада
+        result.readingId,
+        originalQuestion // Передаем оригинальный вопрос
       );
 
       console.log('API Response:', response);
+      console.log('Response success:', response.success);
       console.log('Response data:', response.data);
-      console.log('Response data type:', typeof response.data);
-      console.log('Response data keys:', response.data ? Object.keys(response.data) : 'no data');
 
-      // Проверяем структуру ответа более детально
+      // Проверяем структуру ответа
       let answer = 'Карты говорят, что ответ на ваш уточняющий вопрос требует более глубокого размышления.';
       let clarifyingCard = result.card; // Используем карту из основного результата по умолчанию
+      let yesNoAnswer: 'Да' | 'Нет' | null = null;
       
       if (response.success && response.data) {
+        // Ответ может быть в response.data.answer или response.data.data.answer
         if (response.data.answer) {
           answer = response.data.answer;
-          // Если в ответе есть карта, используем её, иначе используем карту из основного результата
           clarifyingCard = response.data.card || result.card;
+          yesNoAnswer = response.data.yesNoAnswer || null;
         } else if (response.data.data && response.data.data.answer) {
-          // Возможно, ответ вложен глубже
           answer = response.data.data.answer;
           clarifyingCard = response.data.data.card || result.card;
+          yesNoAnswer = response.data.data.yesNoAnswer || null;
         } else {
           console.error('Answer not found in response data:', response.data);
+        }
+      } else {
+        console.error('API request failed:', response.error);
+      }
+
+      // Если yesNoAnswer не получен из API, извлекаем его из текста ответа
+      if (!yesNoAnswer && answer) {
+        const firstLine = answer.split('\n')[0].trim().toUpperCase();
+        if (firstLine.includes('НЕТ') || firstLine.startsWith('НЕТ')) {
+          yesNoAnswer = 'Нет';
+        } else if (firstLine.includes('ДА') || firstLine.startsWith('ДА')) {
+          yesNoAnswer = 'Да';
         }
       }
 
       console.log('Final answer:', answer);
       console.log('Clarifying card:', clarifyingCard);
+      console.log('Yes/No answer:', yesNoAnswer);
 
       // Обновляем вопрос с полученным ответом и картой
       setClarifyingQuestions(prev => 
         prev.map((q, index) => 
           index === prev.length - 1 
-            ? { ...q, answer, card: clarifyingCard, isLoading: false }
+            ? { ...q, answer, card: clarifyingCard, yesNoAnswer, isLoading: false }
             : q
         )
       );
@@ -222,7 +310,40 @@ export function YesNoScreen({ onBack }: YesNoScreenProps) {
 
   // Функции для модального окна подробного описания
   const openDescriptionModal = (card: any) => {
-    setSelectedCardForDescription(card);
+    // Если карта не имеет полных данных (meaning, advice, keywords), дополняем их из локального источника
+    let enrichedCard = { ...card };
+    
+    // Ищем карту по имени в локальных данных (синхронно, так как tarotCards уже импортирован)
+    const localCard = tarotCards.find(c => {
+      const cardName = card.name?.toLowerCase().trim();
+      const localName = c.name?.toLowerCase().trim();
+      return cardName === localName;
+    });
+    
+    if (localCard) {
+      // Дополняем карту данными из локального источника
+      enrichedCard = {
+        ...card,
+        meaning: card.meaning || localCard.meaning || card.uprightInterpretation || card.reversedInterpretation || 'Значение карты',
+        advice: card.advice || localCard.advice || card.interpretation || 'Совет карты',
+        keywords: card.keywords || localCard.keywords || 'Ключевые слова'
+      };
+    } else {
+      // Если карта не найдена, используем значения по умолчанию или из интерпретации
+      enrichedCard = {
+        ...card,
+        meaning: card.meaning || card.uprightInterpretation || card.reversedInterpretation || 'Значение карты',
+        advice: card.advice || card.interpretation || 'Совет карты',
+        keywords: card.keywords || 'Ключевые слова'
+      };
+    }
+    
+    console.log('Opening description modal for card:', enrichedCard);
+    console.log('Card has meaning:', !!enrichedCard.meaning);
+    console.log('Card has advice:', !!enrichedCard.advice);
+    console.log('Card has keywords:', !!enrichedCard.keywords);
+    
+    setSelectedCardForDescription(enrichedCard);
     setShowDescriptionModal(true);
   };
 
@@ -250,7 +371,7 @@ export function YesNoScreen({ onBack }: YesNoScreenProps) {
       <div 
         className="absolute inset-0 opacity-20"
         style={{
-          backgroundImage: `url(https://images.unsplash.com/photo-1623489956130-64c5f8e84590?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxzdGFycyUyMG5pZ2h0JTIwc2t5JTIwbWFnaWNhbHxlbnwxfHx8fDE3NTc2NjA3NzR8MA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral)`,
+          // Убрана ссылка на unsplash для избежания таймаутов
           backgroundSize: 'cover',
           backgroundPosition: 'center',
         }}
@@ -438,7 +559,7 @@ export function YesNoScreen({ onBack }: YesNoScreenProps) {
                 {/* Answer */}
                 <motion.div
                   className={`text-center p-6 rounded-2xl border-2 ${
-                    result.answer === 'ДА'
+                    (result.yesNoAnswer === 'Да' || result.answer.toUpperCase().trim() === 'ДА')
                       ? 'bg-green-900/30 border-green-400/30'
                       : 'bg-red-900/30 border-red-400/30'
                   }`}
@@ -447,12 +568,12 @@ export function YesNoScreen({ onBack }: YesNoScreenProps) {
                   transition={{ duration: 0.5, delay: 0.8 }}
                 >
                   <div className="text-4xl mb-2">
-                    {result.answer === 'ДА' ? '✅' : '❌'}
+                    {(result.yesNoAnswer === 'Да' || result.answer.toUpperCase().trim() === 'ДА') ? '✅' : '❌'}
                   </div>
                   <h2 className={`text-3xl font-bold mb-2 ${
-                    result.answer === 'ДА' ? 'text-green-400' : 'text-red-400'
+                    (result.yesNoAnswer === 'Да' || result.answer.toUpperCase().trim() === 'ДА') ? 'text-green-400' : 'text-red-400'
                   }`}>
-                    {result.answer}
+                    {result.yesNoAnswer || result.answer}
                   </h2>
                 </motion.div>
 
@@ -586,7 +707,7 @@ export function YesNoScreen({ onBack }: YesNoScreenProps) {
                               {/* Answer */}
                               <motion.div
                                 className={`text-center p-6 rounded-2xl border-2 ${
-                                  item.answer.split('\n')[0] === 'ДА'
+                                  (item.yesNoAnswer === 'Да' || (item.answer && item.answer.split('\n')[0].toUpperCase().includes('ДА')))
                                     ? 'bg-green-900/30 border-green-400/30'
                                     : 'bg-red-900/30 border-red-400/30'
                                 }`}
@@ -595,12 +716,14 @@ export function YesNoScreen({ onBack }: YesNoScreenProps) {
                                 transition={{ duration: 0.5, delay: 0.8 }}
                               >
                                 <div className="text-4xl mb-2">
-                                  {item.answer.split('\n')[0] === 'ДА' ? '✅' : '❌'}
+                                  {(item.yesNoAnswer === 'Да' || (item.answer && item.answer.split('\n')[0].toUpperCase().includes('ДА'))) ? '✅' : '❌'}
                                 </div>
                                 <h2 className={`text-3xl font-bold mb-2 ${
-                                  item.answer.split('\n')[0] === 'ДА' ? 'text-green-400' : 'text-red-400'
+                                  (item.yesNoAnswer === 'Да' || (item.answer && item.answer.split('\n')[0].toUpperCase().includes('ДА')))
+                                    ? 'text-green-400' 
+                                    : 'text-red-400'
                                 }`}>
-                                  {item.answer.split('\n')[0]}
+                                  {item.yesNoAnswer || (item.answer ? item.answer.split('\n')[0] : 'Нет')}
                                 </h2>
                               </motion.div>
 
@@ -712,8 +835,8 @@ export function YesNoScreen({ onBack }: YesNoScreenProps) {
                 <h3 className="text-lg text-white font-medium">Неверный формат вопроса</h3>
               </div>
               <p className="text-gray-300 mb-6">
-                Пожалуйста, сформулируйте осмысленный вопрос, который заканчивается знаком вопроса (?). 
-                Вопрос должен содержать реальные слова и быть понятным.
+                Пожалуйста, сформулируйте осмысленный вопрос, который заканчивается знаком вопроса (?).
+                Вопрос должен содержать реальные слова, быть понятным и содержать не менее 10 символов.
                 <br /><br />
                 Например: "Стоит ли мне принять это предложение?"
               </p>

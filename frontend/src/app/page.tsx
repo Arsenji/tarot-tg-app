@@ -381,7 +381,11 @@ export default function Home() {
           setRefreshSubscription(prev => prev + 1);
         }} />;
       case 'threeCards':
-        return <ThreeCardsScreen onBack={() => setCurrentScreen('main')} />;
+        return <ThreeCardsScreen onBack={() => {
+          setCurrentScreen('main');
+          // Обновляем статус подписки после возврата с экрана Three Cards
+          setRefreshSubscription(prev => prev + 1);
+        }} />;
       case 'yesNo':
         return <YesNoScreen onBack={() => setCurrentScreen('main')} />;
       case 'main':
