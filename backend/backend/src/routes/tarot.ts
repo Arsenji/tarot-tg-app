@@ -1087,6 +1087,11 @@ router.get('/subscription-status', async (req: any, res) => {
         dailyAdvice: remainingDailyAdvice,
         yesNo: remainingYesNo,
         threeCards: remainingThreeCards
+      },
+      usageChecks: {
+        hasUsedDailyAdviceToday,
+        hasUsedYesNoToday,
+        hasUsedThreeCardsToday
       }
     });
     
