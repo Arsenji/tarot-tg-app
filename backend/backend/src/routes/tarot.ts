@@ -1052,6 +1052,15 @@ router.get('/subscription-status', async (req: any, res) => {
     const hasUsedYesNoToday = await hasUsedFreeYesNo(userId);
     const hasUsedThreeCardsToday = await hasUsedThreeCardsToday(userId);
     
+    logger.info('Subscription status check details', {
+      userId,
+      hasSubscription: subscriptionStatus.hasSubscription,
+      isAdmin,
+      hasUsedDailyAdviceToday,
+      hasUsedYesNoToday,
+      hasUsedThreeCardsToday
+    });
+    
     // Формируем ответ в формате, который ожидает фронтенд
     // Администратор всегда имеет доступ ко всем раскладам
     // Для бесплатных пользователей: 1 раз в день для каждого типа
@@ -1073,7 +1082,12 @@ router.get('/subscription-status', async (req: any, res) => {
     logger.info('Subscription info response', {
       userId,
       isAdmin,
-      subscriptionInfo
+      subscriptionInfo,
+      calculatedRemaining: {
+        dailyAdvice: remainingDailyAdvice,
+        yesNo: remainingYesNo,
+        threeCards: remainingThreeCards
+      }
     });
     
     res.json({
