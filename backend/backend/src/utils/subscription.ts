@@ -108,13 +108,32 @@ export async function deactivateSubscription(telegramId: number): Promise<boolea
 export async function hasUsedFreeYesNo(telegramId: number): Promise<boolean> {
   try {
     const user = await User.findOne({ telegramId });
-    if (!user || !user.lastYesNoDate) return false;
+    if (!user || !user.lastYesNoDate) {
+      logger.info('hasUsedFreeYesNo: user not found or no lastYesNoDate', { 
+        telegramId, 
+        hasUser: !!user, 
+        hasLastYesNoDate: !!user?.lastYesNoDate 
+      });
+      return false;
+    }
     
     const today = new Date();
     const lastDate = new Date(user.lastYesNoDate);
     
-    // Проверяем, что даты в один день (игнорируя время)
-    return today.toDateString() === lastDate.toDateString();
+    // Нормализуем даты до UTC, чтобы избежать проблем с часовыми поясами
+    const todayUTC = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+    const lastDateUTC = new Date(Date.UTC(lastDate.getFullYear(), lastDate.getMonth(), lastDate.getDate()));
+    
+    const isSameDay = todayUTC.getTime() === lastDateUTC.getTime();
+    
+    logger.info('hasUsedFreeYesNo check', { 
+      telegramId, 
+      today: todayUTC.toISOString(), 
+      lastDate: lastDateUTC.toISOString(), 
+      isSameDay 
+    });
+    
+    return isSameDay;
   } catch (error) {
     logger.error('Error checking free Yes/No usage', { error, telegramId });
     return false;
@@ -146,12 +165,32 @@ export async function markFreeYesNoUsed(telegramId: number): Promise<boolean> {
 export async function hasUsedDailyAdviceToday(telegramId: number): Promise<boolean> {
   try {
     const user = await User.findOne({ telegramId });
-    if (!user || !user.lastDailyAdviceDate) return false;
+    if (!user || !user.lastDailyAdviceDate) {
+      logger.info('hasUsedDailyAdviceToday: user not found or no lastDailyAdviceDate', { 
+        telegramId, 
+        hasUser: !!user, 
+        hasLastDailyAdviceDate: !!user?.lastDailyAdviceDate 
+      });
+      return false;
+    }
     
     const today = new Date();
     const lastDate = new Date(user.lastDailyAdviceDate);
     
-    return today.toDateString() === lastDate.toDateString();
+    // Нормализуем даты до UTC, чтобы избежать проблем с часовыми поясами
+    const todayUTC = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+    const lastDateUTC = new Date(Date.UTC(lastDate.getFullYear(), lastDate.getMonth(), lastDate.getDate()));
+    
+    const isSameDay = todayUTC.getTime() === lastDateUTC.getTime();
+    
+    logger.info('hasUsedDailyAdviceToday check', { 
+      telegramId, 
+      today: todayUTC.toISOString(), 
+      lastDate: lastDateUTC.toISOString(), 
+      isSameDay 
+    });
+    
+    return isSameDay;
   } catch (error) {
     logger.error('Error checking daily advice usage', { error, telegramId });
     return false;
@@ -183,12 +222,32 @@ export async function markDailyAdviceUsed(telegramId: number): Promise<boolean> 
 export async function hasUsedThreeCardsToday(telegramId: number): Promise<boolean> {
   try {
     const user = await User.findOne({ telegramId });
-    if (!user || !user.lastThreeCardsDate) return false;
+    if (!user || !user.lastThreeCardsDate) {
+      logger.info('hasUsedThreeCardsToday: user not found or no lastThreeCardsDate', { 
+        telegramId, 
+        hasUser: !!user, 
+        hasLastThreeCardsDate: !!user?.lastThreeCardsDate 
+      });
+      return false;
+    }
     
     const today = new Date();
     const lastDate = new Date(user.lastThreeCardsDate);
     
-    return today.toDateString() === lastDate.toDateString();
+    // Нормализуем даты до UTC, чтобы избежать проблем с часовыми поясами
+    const todayUTC = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+    const lastDateUTC = new Date(Date.UTC(lastDate.getFullYear(), lastDate.getMonth(), lastDate.getDate()));
+    
+    const isSameDay = todayUTC.getTime() === lastDateUTC.getTime();
+    
+    logger.info('hasUsedThreeCardsToday check', { 
+      telegramId, 
+      today: todayUTC.toISOString(), 
+      lastDate: lastDateUTC.toISOString(), 
+      isSameDay 
+    });
+    
+    return isSameDay;
   } catch (error) {
     logger.error('Error checking three cards usage', { error, telegramId });
     return false;

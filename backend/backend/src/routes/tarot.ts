@@ -592,9 +592,13 @@ router.post('/yes-no', async (req: any, res) => {
     const russianCardName = getRussianCardName(randomCard);
     const imagePath = getCardImagePath(randomCard, isReversed);
 
-    // Отмечаем использование Yes/No для бесплатных пользователей
+    // Отмечаем использование Yes/No для бесплатных пользователей ПОСЛЕ успешного получения интерпретации
     if (!subscriptionStatus.hasSubscription && !isAdmin) {
       await markFreeYesNoUsed(userId);
+      logger.info('Yes/No marked as used for free user', { 
+        userId: req.user.userId, 
+        telegramId: userId 
+      });
     }
 
     // Сохраняем расклад ТОЛЬКО для пользователей с подпиской
@@ -656,11 +660,6 @@ router.post('/yes-no', async (req: any, res) => {
         telegramId: userId,
         errorMessage: saveError instanceof Error ? saveError.message : String(saveError)
       });
-    }
-
-    // Отмечаем использование бесплатного Yes/No
-    if (!subscriptionStatus.hasSubscription) {
-      await markFreeYesNoUsed(userId);
     }
 
     // Формируем ответ в формате, который ожидает фронтенд
