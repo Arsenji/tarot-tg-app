@@ -108,11 +108,16 @@ export async function deactivateSubscription(telegramId: number): Promise<boolea
 export async function hasUsedFreeYesNo(telegramId: number): Promise<boolean> {
   try {
     const user = await User.findOne({ telegramId });
-    if (!user || !user.lastYesNoDate) {
-      logger.info('hasUsedFreeYesNo: user not found or no lastYesNoDate', { 
+    if (!user) {
+      logger.info('hasUsedFreeYesNo: user not found', { telegramId });
+      return false;
+    }
+    
+    if (!user.lastYesNoDate) {
+      logger.info('hasUsedFreeYesNo: no lastYesNoDate', { 
         telegramId, 
-        hasUser: !!user, 
-        hasLastYesNoDate: !!user?.lastYesNoDate 
+        hasUser: true,
+        lastYesNoDate: null
       });
       return false;
     }
@@ -129,8 +134,10 @@ export async function hasUsedFreeYesNo(telegramId: number): Promise<boolean> {
     logger.info('hasUsedFreeYesNo check', { 
       telegramId, 
       today: todayUTC.toISOString(), 
-      lastDate: lastDateUTC.toISOString(), 
-      isSameDay 
+      lastDate: lastDateUTC.toISOString(),
+      lastYesNoDateRaw: user.lastYesNoDate?.toISOString(),
+      isSameDay,
+      willReturn: isSameDay
     });
     
     return isSameDay;
@@ -171,11 +178,16 @@ export async function markFreeYesNoUsed(telegramId: number): Promise<boolean> {
 export async function hasUsedDailyAdviceToday(telegramId: number): Promise<boolean> {
   try {
     const user = await User.findOne({ telegramId });
-    if (!user || !user.lastDailyAdviceDate) {
-      logger.info('hasUsedDailyAdviceToday: user not found or no lastDailyAdviceDate', { 
+    if (!user) {
+      logger.info('hasUsedDailyAdviceToday: user not found', { telegramId });
+      return false;
+    }
+    
+    if (!user.lastDailyAdviceDate) {
+      logger.info('hasUsedDailyAdviceToday: no lastDailyAdviceDate', { 
         telegramId, 
-        hasUser: !!user, 
-        hasLastDailyAdviceDate: !!user?.lastDailyAdviceDate 
+        hasUser: true,
+        lastDailyAdviceDate: null
       });
       return false;
     }
@@ -192,8 +204,10 @@ export async function hasUsedDailyAdviceToday(telegramId: number): Promise<boole
     logger.info('hasUsedDailyAdviceToday check', { 
       telegramId, 
       today: todayUTC.toISOString(), 
-      lastDate: lastDateUTC.toISOString(), 
-      isSameDay 
+      lastDate: lastDateUTC.toISOString(),
+      lastDailyAdviceDateRaw: user.lastDailyAdviceDate?.toISOString(),
+      isSameDay,
+      willReturn: isSameDay
     });
     
     return isSameDay;
@@ -228,11 +242,16 @@ export async function markDailyAdviceUsed(telegramId: number): Promise<boolean> 
 export async function hasUsedThreeCardsToday(telegramId: number): Promise<boolean> {
   try {
     const user = await User.findOne({ telegramId });
-    if (!user || !user.lastThreeCardsDate) {
-      logger.info('hasUsedThreeCardsToday: user not found or no lastThreeCardsDate', { 
+    if (!user) {
+      logger.info('hasUsedThreeCardsToday: user not found', { telegramId });
+      return false;
+    }
+    
+    if (!user.lastThreeCardsDate) {
+      logger.info('hasUsedThreeCardsToday: no lastThreeCardsDate', { 
         telegramId, 
-        hasUser: !!user, 
-        hasLastThreeCardsDate: !!user?.lastThreeCardsDate 
+        hasUser: true,
+        lastThreeCardsDate: null
       });
       return false;
     }
@@ -249,8 +268,10 @@ export async function hasUsedThreeCardsToday(telegramId: number): Promise<boolea
     logger.info('hasUsedThreeCardsToday check', { 
       telegramId, 
       today: todayUTC.toISOString(), 
-      lastDate: lastDateUTC.toISOString(), 
-      isSameDay 
+      lastDate: lastDateUTC.toISOString(),
+      lastThreeCardsDateRaw: user.lastThreeCardsDate?.toISOString(),
+      isSameDay,
+      willReturn: isSameDay
     });
     
     return isSameDay;
