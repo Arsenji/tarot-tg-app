@@ -145,13 +145,19 @@ export async function hasUsedFreeYesNo(telegramId: number): Promise<boolean> {
  */
 export async function markFreeYesNoUsed(telegramId: number): Promise<boolean> {
   try {
-    await User.findOneAndUpdate(
+    const now = new Date();
+    const result = await User.findOneAndUpdate(
       { telegramId },
-      { lastYesNoDate: new Date() },
+      { lastYesNoDate: now },
       { upsert: true, new: true }
     );
 
-    logger.info('Free Yes/No marked as used today', { telegramId });
+    logger.info('Free Yes/No marked as used today', { 
+      telegramId, 
+      lastYesNoDate: now.toISOString(),
+      userExists: !!result,
+      updatedLastYesNoDate: result?.lastYesNoDate?.toISOString()
+    });
     return true;
   } catch (error) {
     logger.error('Error marking free Yes/No as used', { error, telegramId });
@@ -259,13 +265,19 @@ export async function hasUsedThreeCardsToday(telegramId: number): Promise<boolea
  */
 export async function markThreeCardsUsed(telegramId: number): Promise<boolean> {
   try {
-    await User.findOneAndUpdate(
+    const now = new Date();
+    const result = await User.findOneAndUpdate(
       { telegramId },
-      { lastThreeCardsDate: new Date() },
+      { lastThreeCardsDate: now },
       { upsert: true, new: true }
     );
 
-    logger.info('Three Cards marked as used today', { telegramId });
+    logger.info('Three Cards marked as used today', { 
+      telegramId, 
+      lastThreeCardsDate: now.toISOString(),
+      userExists: !!result,
+      updatedLastThreeCardsDate: result?.lastThreeCardsDate?.toISOString()
+    });
     return true;
   } catch (error) {
     logger.error('Error marking three cards as used', { error, telegramId });
