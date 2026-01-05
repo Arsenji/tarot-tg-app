@@ -20,7 +20,8 @@ const UserSchema = new Schema<IUser>({
   telegramId: {
     type: Number,
     required: true,
-    unique: true
+    unique: true,
+    index: true
   },
   firstName: {
     type: String,
@@ -73,7 +74,7 @@ const UserSchema = new Schema<IUser>({
 });
 
 // Индексы для оптимизации запросов
-UserSchema.index({ telegramId: 1 });
+// telegramId уже имеет индекс через unique: true и index: true
 UserSchema.index({ subscriptionStatus: 1 });
 UserSchema.index({ subscriptionExpiresAt: 1 });
 
