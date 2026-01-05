@@ -521,6 +521,20 @@ router.post('/yes-no', async (req: any, res) => {
     try {
       const { User } = await import('../models/User');
       const user = await User.findOne({ telegramId: userId });
+      const now = new Date();
+      const todayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+      
+      let lastDateUTC = null;
+      let isSameDay = false;
+      let isFuture = false;
+      
+      if (user?.lastYesNoDate) {
+        const lastDate = new Date(user.lastYesNoDate);
+        lastDateUTC = new Date(Date.UTC(lastDate.getUTCFullYear(), lastDate.getUTCMonth(), lastDate.getUTCDate()));
+        isSameDay = todayUTC.getTime() === lastDateUTC.getTime();
+        isFuture = lastDateUTC.getTime() > todayUTC.getTime();
+      }
+      
       logger.info('Yes/No subscription check - detailed', {
         userId,
         hasSubscription: subscriptionStatus.hasSubscription,
@@ -529,7 +543,12 @@ router.post('/yes-no', async (req: any, res) => {
         willAllow: subscriptionStatus.hasSubscription || isAdmin || !hasUsedToday,
         userExists: !!user,
         lastYesNoDate: user?.lastYesNoDate?.toISOString() || null,
-        currentDate: new Date().toISOString()
+        currentDate: now.toISOString(),
+        todayUTC: todayUTC.toISOString(),
+        lastDateUTC: lastDateUTC?.toISOString() || null,
+        isSameDay,
+        isFuture,
+        timeDifference: lastDateUTC ? (todayUTC.getTime() - lastDateUTC.getTime()) / (1000 * 60 * 60 * 24) : null
       });
     } catch (error) {
       logger.error('Error getting user details for Yes/No check', { error, userId });
