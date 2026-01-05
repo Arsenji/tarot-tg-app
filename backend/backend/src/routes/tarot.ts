@@ -558,7 +558,7 @@ router.post('/yes-no', async (req: any, res) => {
       userId,
       hasSubscription: subscriptionStatus.hasSubscription,
       isAdmin,
-      hasUsedToday,
+      hasUsedToday, // Исправлено: было hasUsedFree, теперь hasUsedToday
       willAllow: subscriptionStatus.hasSubscription || isAdmin || !hasUsedToday
     });
     
@@ -1343,3 +1343,4 @@ router.get('/history-debug', async (req: any, res) => {
 }); // Для обратной совместимости со старым кодом
 
 export default router;
+// Force rebuild Mon Jan  5 17:29:45 +04 2026
