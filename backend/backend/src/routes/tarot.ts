@@ -517,6 +517,24 @@ router.post('/yes-no', async (req: any, res) => {
     const subscriptionStatus = await checkSubscriptionStatus(userId);
     const hasUsedToday = await hasUsedFreeYesNo(userId);
     
+    // Дополнительное логирование для отладки
+    try {
+      const { User } = await import('../models/User');
+      const user = await User.findOne({ telegramId: userId });
+      logger.info('Yes/No subscription check - detailed', {
+        userId,
+        hasSubscription: subscriptionStatus.hasSubscription,
+        isAdmin,
+        hasUsedToday,
+        willAllow: subscriptionStatus.hasSubscription || isAdmin || !hasUsedToday,
+        userExists: !!user,
+        lastYesNoDate: user?.lastYesNoDate?.toISOString() || null,
+        currentDate: new Date().toISOString()
+      });
+    } catch (error) {
+      logger.error('Error getting user details for Yes/No check', { error, userId });
+    }
+    
     logger.info('Yes/No subscription check', {
       userId,
       hasSubscription: subscriptionStatus.hasSubscription,
