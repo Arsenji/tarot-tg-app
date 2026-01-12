@@ -1065,6 +1065,7 @@ router.get('/history', async (req: any, res) => {
 });
 
 // Получить статус подписки (для фронтенда)
+// VERSION MARKER: 2026-01-12-v3 - проверка деплоя
 router.get('/subscription-status', async (req: any, res) => {
   try {
     const userId = req.user.telegramId;
