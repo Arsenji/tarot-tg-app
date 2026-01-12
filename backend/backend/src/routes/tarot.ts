@@ -558,8 +558,9 @@ router.post('/yes-no', async (req: any, res) => {
       userId,
       hasSubscription: subscriptionStatus.hasSubscription,
       isAdmin,
-      hasUsedToday, // Исправлено: было hasUsedFree, теперь hasUsedToday
-      willAllow: subscriptionStatus.hasSubscription || isAdmin || !hasUsedToday
+      hasUsedToday, // VERSION: 2026-01-12 - исправлено: было hasUsedFree, теперь hasUsedToday
+      willAllow: subscriptionStatus.hasSubscription || isAdmin || !hasUsedToday,
+      codeVersion: '2026-01-12-v2' // Маркер версии для проверки деплоя
     });
     
     // Для бесплатных пользователей: 1 раз в день

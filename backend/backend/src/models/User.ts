@@ -20,8 +20,8 @@ const UserSchema = new Schema<IUser>({
   telegramId: {
     type: Number,
     required: true,
-    unique: true,
-    index: true
+    unique: true
+    // unique: true уже создает индекс, не нужно дублировать index: true
   },
   firstName: {
     type: String,
