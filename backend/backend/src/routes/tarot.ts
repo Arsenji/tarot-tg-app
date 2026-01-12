@@ -1096,7 +1096,8 @@ router.get('/subscription-status', async (req: any, res) => {
       isAdmin,
       hasUsedDailyAdviceToday,
       hasUsedYesNoToday,
-      hasUsedThreeCardsToday
+      hasUsedThreeCardsToday,
+      codeVersion: '2026-01-12-v2' // Маркер версии для проверки деплоя
     });
     
     // Формируем ответ в формате, который ожидает фронтенд
