@@ -489,6 +489,7 @@ router.post('/three-cards', async (req: any, res) => {
 });
 
 // Yes/No расклад
+// VERSION MARKER: 2026-01-12-v3 - проверка деплоя
 router.post('/yes-no', async (req: any, res) => {
   try {
     const userId = req.user.telegramId;
