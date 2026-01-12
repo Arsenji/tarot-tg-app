@@ -1145,6 +1145,91 @@ router.get('/subscription-status', async (req: any, res) => {
   }
 });
 
+// Диагностический эндпоинт для проверки состояния данных
+router.get('/debug/usage-status', authenticateToken, async (req: any, res) => {
+  try {
+    const userId = req.user.telegramId;
+    const { User } = await import('../models/User');
+    const user = await User.findOne({ telegramId: userId });
+    
+    if (!user) {
+      return res.json({
+        success: true,
+        userExists: false,
+        message: 'User not found'
+      });
+    }
+    
+    const now = new Date();
+    const todayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    
+    const debugInfo: any = {
+      userId,
+      currentTime: now.toISOString(),
+      todayUTC: todayUTC.toISOString(),
+      userExists: true,
+      subscriptionStatus: user.subscriptionStatus,
+      subscriptionExpiresAt: user.subscriptionExpiresAt?.toISOString() || null,
+      dates: {}
+    };
+    
+    // Проверяем каждую дату
+    ['lastDailyAdviceDate', 'lastYesNoDate', 'lastThreeCardsDate'].forEach((fieldName) => {
+      const dateValue = (user as any)[fieldName];
+      if (dateValue) {
+        const date = new Date(dateValue);
+        const dateUTC = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+        const isSameDay = todayUTC.getTime() === dateUTC.getTime();
+        const isFuture = dateUTC.getTime() > todayUTC.getTime();
+        const daysDiff = (todayUTC.getTime() - dateUTC.getTime()) / (1000 * 60 * 60 * 24);
+        
+        debugInfo.dates[fieldName] = {
+          raw: dateValue.toISOString(),
+          utc: dateUTC.toISOString(),
+          isSameDay,
+          isFuture,
+          daysDifference: daysDiff,
+          willReturnUsed: isSameDay && !isFuture
+        };
+      } else {
+        debugInfo.dates[fieldName] = {
+          raw: null,
+          utc: null,
+          isSameDay: false,
+          isFuture: false,
+          daysDifference: null,
+          willReturnUsed: false
+        };
+      }
+    });
+    
+    // Проверяем функции
+    const hasUsedDailyAdviceToday = await hasUsedDailyAdviceToday(userId);
+    const hasUsedYesNoToday = await hasUsedFreeYesNo(userId);
+    const hasUsedThreeCardsToday = await hasUsedThreeCardsToday(userId);
+    
+    debugInfo.functionResults = {
+      hasUsedDailyAdviceToday,
+      hasUsedYesNoToday,
+      hasUsedThreeCardsToday
+    };
+    
+    logger.info('Debug usage status', debugInfo);
+    
+    res.json({
+      success: true,
+      ...debugInfo
+    });
+  } catch (error) {
+    logger.error('Debug usage status error', { error, userId: req.user?.telegramId });
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+      errorMessage: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
 // Уточняющий вопрос для расклада
 // Поддерживаем оба пути для обратной совместимости
 const handleClarifyingQuestion = async (req: any, res: any) => {
