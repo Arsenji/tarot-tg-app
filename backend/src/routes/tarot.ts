@@ -3,7 +3,15 @@ import mongoose from 'mongoose';
 import { Types } from 'mongoose';
 import { authenticateToken } from '../middleware/auth';
 import { openAIService } from '../services/openai';
-import { checkSubscriptionStatus, hasUsedFreeYesNo, markFreeYesNoUsed } from '../utils/subscription';
+import { 
+  checkSubscriptionStatus, 
+  hasUsedFreeYesNo, 
+  markFreeYesNoUsed,
+  hasUsedDailyAdviceToday,
+  markDailyAdviceUsed,
+  hasUsedThreeCardsToday,
+  markThreeCardsUsed
+} from '../utils/subscription';
 import { TarotReading } from '../models/TarotReading';
 import logger from '../utils/logger';
 import { getRussianCardName, getCardImagePath } from '../utils/cardTranslations';
