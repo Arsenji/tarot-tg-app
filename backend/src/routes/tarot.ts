@@ -569,68 +569,63 @@ router.post('/yes-no', async (req: any, res) => {
     const russianCardName = getRussianCardName(randomCard);
     const imagePath = getCardImagePath(randomCard, isReversed);
 
-    // Сохраняем расклад
-    try {
-      if (interpretationText && interpretationText.trim().length > 0) {
-        logger.info('Attempting to save yes-no reading', {
-          userId: req.user.userId,
-          telegramId: userId,
-          cardName: randomCard,
-          hasInterpretation: !!interpretationText
-        });
-        
-        const saved = await openAIService.saveReading(
-          req.user.userId,
-          userId,
-          {
-            cards: [cardData],
-            question,
-            readingType: 'yesno'
-          },
-          interpretationText
-        );
-        if (!saved) {
-          logger.warn('Failed to save yes-no reading', { 
-            userId: req.user.userId, 
-            telegramId: userId,
-            cardName: randomCard
-          });
-        } else {
-          logger.info('Yes-no reading saved successfully', { 
-            userId: req.user.userId, 
-            telegramId: userId,
-            cardName: randomCard
-          });
-          
-          // Сразу проверяем, что запись действительно в БД
-          const verifyCount = await TarotReading.countDocuments({ 
-            telegramId: userId,
-            readingType: 'yesno'
-          });
-          logger.info('Verification: readings count for this user after save', {
-            userId: req.user.userId,
-            telegramId: userId,
-            count: verifyCount
-          });
-        }
-      } else {
-        logger.warn('Skipping save: interpretation is empty', { 
-          userId: req.user.userId, 
-          telegramId: userId 
-        });
-      }
-    } catch (saveError) {
-      logger.error('Error saving yes-no reading', { 
-        error: saveError, 
+    // Отмечаем использование Yes/No для бесплатных пользователей ПОСЛЕ успешного получения интерпретации
+    if (!subscriptionStatus.hasSubscription && !isAdmin) {
+      await markFreeYesNoUsed(userId);
+      logger.info('Yes/No marked as used for free user', { 
         userId: req.user.userId, 
-        telegramId: userId,
-        errorMessage: saveError instanceof Error ? saveError.message : String(saveError)
+        telegramId: userId 
       });
     }
 
-    // Отмечаем использование бесплатного Yes/No
-    if (!subscriptionStatus.hasSubscription) {
-      await markFreeYesNoUsed(userId);
+    // Сохраняем расклад ТОЛЬКО для пользователей с подпиской
+    if (subscriptionStatus.hasSubscription || isAdmin) {
+      try {
+        if (interpretationText && interpretationText.trim().length > 0) {
+          logger.info('Attempting to save yes-no reading', {
+            userId: req.user.userId,
+            telegramId: userId,
+            cardName: randomCard,
+            hasInterpretation: !!interpretationText
+          });
+          
+          const saved = await openAIService.saveReading(
+            req.user.userId,
+            userId,
+            {
+              cards: [cardData],
+              question,
+              readingType: 'yesno'
+            },
+            interpretationText
+          );
+          if (!saved) {
+            logger.warn('Failed to save yes-no reading', { 
+              userId: req.user.userId, 
+              telegramId: userId,
+              cardName: randomCard
+            });
+          } else {
+            logger.info('Yes-no reading saved successfully', { 
+              userId: req.user.userId, 
+              telegramId: userId,
+              cardName: randomCard
+            });
+          }
+        } else {
+          logger.warn('Skipping save: interpretation is empty', { 
+            userId: req.user.userId, 
+            telegramId: userId 
+          });
+        }
+      } catch (saveError) {
+        logger.error('Error saving yes-no reading', { 
+          error: saveError, 
+          userId: req.user.userId, 
+          telegramId: userId,
+          errorMessage: saveError instanceof Error ? saveError.message : String(saveError)
+        });
+      }
     }
 
     // Формируем ответ в формате, который ожидает фронтенд
