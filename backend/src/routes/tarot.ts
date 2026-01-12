@@ -455,20 +455,58 @@ router.post('/yes-no', async (req: any, res) => {
     
     // Проверяем подписку или бесплатное использование
     const subscriptionStatus = await checkSubscriptionStatus(userId);
-    const hasUsedFree = await hasUsedFreeYesNo(userId);
+    const hasUsedToday = await hasUsedFreeYesNo(userId);
+    
+    // Дополнительное логирование для отладки
+    try {
+      const { User } = await import('../models/User');
+      const user = await User.findOne({ telegramId: userId });
+      const now = new Date();
+      const todayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+      
+      let lastDateUTC = null;
+      let isSameDay = false;
+      let isFuture = false;
+      
+      if (user?.lastYesNoDate) {
+        const lastDate = new Date(user.lastYesNoDate);
+        lastDateUTC = new Date(Date.UTC(lastDate.getUTCFullYear(), lastDate.getUTCMonth(), lastDate.getUTCDate()));
+        isSameDay = todayUTC.getTime() === lastDateUTC.getTime();
+        isFuture = lastDateUTC.getTime() > todayUTC.getTime();
+      }
+      
+      logger.info('Yes/No subscription check - detailed', {
+        userId,
+        hasSubscription: subscriptionStatus.hasSubscription,
+        isAdmin,
+        hasUsedToday,
+        willAllow: subscriptionStatus.hasSubscription || isAdmin || !hasUsedToday,
+        userExists: !!user,
+        lastYesNoDate: user?.lastYesNoDate?.toISOString() || null,
+        currentDate: now.toISOString(),
+        todayUTC: todayUTC.toISOString(),
+        lastDateUTC: lastDateUTC?.toISOString() || null,
+        isSameDay,
+        isFuture,
+        timeDifference: lastDateUTC ? (todayUTC.getTime() - lastDateUTC.getTime()) / (1000 * 60 * 60 * 24) : null
+      });
+    } catch (error) {
+      logger.error('Error getting user details for Yes/No check', { error, userId });
+    }
     
     logger.info('Yes/No subscription check', {
       userId,
       hasSubscription: subscriptionStatus.hasSubscription,
       isAdmin,
-      hasUsedFree,
-      willAllow: subscriptionStatus.hasSubscription || isAdmin || !hasUsedFree
+      hasUsedToday, // VERSION: 2026-01-12 - исправлено: было hasUsedFree, теперь hasUsedToday
+      willAllow: subscriptionStatus.hasSubscription || isAdmin || !hasUsedToday,
+      codeVersion: '2026-01-12-v3' // Маркер версии для проверки деплоя
     });
     
-    if (!subscriptionStatus.hasSubscription && !isAdmin && hasUsedFree) {
+    if (!subscriptionStatus.hasSubscription && !isAdmin && hasUsedToday) {
       return res.status(403).json({
         success: false,
-        error: 'Free Yes/No reading already used. Subscription required.',
+        error: 'Yes/No reading already used today. Subscription required for unlimited access.',
         subscriptionRequired: true
       });
     }
