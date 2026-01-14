@@ -8,7 +8,10 @@ export interface IUser extends Document {
   languageCode: string;
   subscriptionStatus: number; // 0 - нет подписки, 1 - есть подписка
   subscriptionExpiresAt?: Date;
-  freeYesNoUsed: boolean;
+  freeYesNoUsed: boolean; // Deprecated - используем lastYesNoDate
+  lastDailyAdviceDate?: Date; // Дата последнего использования Daily Advice
+  lastYesNoDate?: Date; // Дата последнего использования Yes/No
+  lastThreeCardsDate?: Date; // Дата последнего использования Three Cards
   createdAt: Date;
   updatedAt: Date;
 }
@@ -18,6 +21,7 @@ const UserSchema = new Schema<IUser>({
     type: Number,
     required: true,
     unique: true
+    // unique: true уже создает индекс, не нужно дублировать index: true
   },
   firstName: {
     type: String,
@@ -52,13 +56,25 @@ const UserSchema = new Schema<IUser>({
   freeYesNoUsed: {
     type: Boolean,
     default: false
+  },
+  lastDailyAdviceDate: {
+    type: Date,
+    default: null
+  },
+  lastYesNoDate: {
+    type: Date,
+    default: null
+  },
+  lastThreeCardsDate: {
+    type: Date,
+    default: null
   }
 }, {
   timestamps: true
 });
 
 // Индексы для оптимизации запросов
-UserSchema.index({ telegramId: 1 });
+// telegramId уже имеет индекс через unique: true и index: true
 UserSchema.index({ subscriptionStatus: 1 });
 UserSchema.index({ subscriptionExpiresAt: 1 });
 
