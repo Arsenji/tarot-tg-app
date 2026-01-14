@@ -1007,7 +1007,6 @@ router.get('/subscription-status', async (req: any, res) => {
     
     // Проверяем подписку
     const subscriptionStatus = await checkSubscriptionStatus(userId);
-    const { hasUsedDailyAdviceToday, hasUsedThreeCardsToday } = await import('../utils/subscription');
     const hasUsedDailyAdviceTodayValue = await hasUsedDailyAdviceToday(userId);
     const hasUsedYesNoToday = await hasUsedFreeYesNo(userId);
     const hasUsedThreeCardsTodayValue = await hasUsedThreeCardsToday(userId);
