@@ -387,7 +387,11 @@ export default function Home() {
           setRefreshSubscription(prev => prev + 1);
         }} />;
       case 'yesNo':
-        return <YesNoScreen onBack={() => setCurrentScreen('main')} />;
+        return <YesNoScreen onBack={() => {
+          setCurrentScreen('main');
+          // Обновляем статус подписки после возврата с экрана Yes/No
+          setRefreshSubscription(prev => prev + 1);
+        }} />;
       case 'main':
       default:
         switch (activeTab) {

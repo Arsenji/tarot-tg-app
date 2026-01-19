@@ -17,6 +17,14 @@ export interface ApiResponse<T> {
     remainingDailyAdvice: number;
     remainingYesNo: number;
     remainingThreeCards: number;
+    cooldowns?: {
+      dailyAdviceMsRemaining: number;
+      yesNoMsRemaining: number;
+      threeCardsMsRemaining: number;
+      dailyAdviceHoursRemaining: number;
+      yesNoHoursRemaining: number;
+      threeCardsHoursRemaining: number;
+    };
   };
 }
 

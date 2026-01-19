@@ -74,6 +74,7 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
     remainingDailyAdvice: -1, // -1 означает неограниченно
     remainingYesNo: -1, // -1 означает неограниченно
     remainingThreeCards: -1, // -1 означает неограниченно
+    // cooldowns появится из backend (/tarot/subscription-status) — оставляем опционально
   });
   const [isLoading, setIsLoading] = useState(true);
 
@@ -404,13 +405,60 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
     setIsSubscriptionModalOpen(false);
   };
 
+  const getRemainingCount = (type: 'daily' | 'three_cards' | 'yesno') => {
+    if (!subscriptionInfo) return -1;
+    switch (type) {
+      case 'daily':
+        return subscriptionInfo.remainingDailyAdvice ?? -1;
+      case 'three_cards':
+        return subscriptionInfo.remainingThreeCards ?? -1;
+      case 'yesno':
+        return subscriptionInfo.remainingYesNo ?? -1;
+      default:
+        return -1;
+    }
+  };
+
+  const getCooldownHoursRemaining = (type: 'daily' | 'three_cards' | 'yesno') => {
+    const cooldowns = subscriptionInfo?.cooldowns;
+    if (!cooldowns) return 0;
+    switch (type) {
+      case 'daily':
+        return cooldowns.dailyAdviceHoursRemaining ?? 0;
+      case 'three_cards':
+        return cooldowns.threeCardsHoursRemaining ?? 0;
+      case 'yesno':
+        return cooldowns.yesNoHoursRemaining ?? 0;
+      default:
+        return 0;
+    }
+  };
+
+  const canUseType = (type: 'daily' | 'three_cards' | 'yesno') => {
+    if (!subscriptionInfo) return false;
+    switch (type) {
+      case 'daily':
+        return !!subscriptionInfo.canUseDailyAdvice;
+      case 'three_cards':
+        return !!subscriptionInfo.canUseThreeCards;
+      case 'yesno':
+        return !!subscriptionInfo.canUseYesNo;
+      default:
+        return false;
+    }
+  };
+
+  const isTypeDisabled = (type: 'daily' | 'three_cards' | 'yesno') => {
+    if (subscriptionInfo?.hasSubscription) return false;
+    const remaining = getRemainingCount(type);
+    const canUse = canUseType(type);
+    // Если remaining не пришёл — не показываем "использовано" по умолчанию, но уважаем canUse
+    if (remaining === -1) return !canUse;
+    return remaining === 0 || !canUse;
+  };
+
   const handleOneCardClick = () => {
-    // Проверяем, заблокирована ли кнопка
-    const isDisabled = subscriptionInfo?.hasSubscription 
-      ? false 
-      : ((subscriptionInfo?.remainingDailyAdvice ?? 0) === 0 || !subscriptionInfo?.canUseDailyAdvice);
-    
-    if (isDisabled) {
+    if (isTypeDisabled('daily')) {
       // Если кнопка заблокирована, открываем модальное окно подписки
       handleOpenSubscriptionModal();
       return;
@@ -432,6 +480,10 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
   };
 
   const handleYesNoClick = () => {
+    if (isTypeDisabled('yesno')) {
+      handleOpenSubscriptionModal();
+      return;
+    }
     if (subscriptionInfo?.canUseYesNo || subscriptionInfo?.hasSubscription) {
       onYesNo();
     } else {
@@ -440,6 +492,10 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
   };
 
   const handleThreeCardsClick = () => {
+    if (isTypeDisabled('three_cards')) {
+      handleOpenSubscriptionModal();
+      return;
+    }
     if (subscriptionInfo?.canUseThreeCards || subscriptionInfo?.hasSubscription) {
       onThreeCards();
     } else {
@@ -447,34 +503,15 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
     }
   };
 
-  const getRemainingCount = (type: string) => {
-    if (!subscriptionInfo) return 0;
-    switch (type) {
-      case 'daily':
-        return subscriptionInfo.remainingDailyAdvice ?? 0;
-      case 'three_cards':
-        return subscriptionInfo.remainingThreeCards ?? 0;
-      case 'yesno':
-        return subscriptionInfo.remainingYesNo ?? 0;
-      default:
-        return 0;
-    }
-  };
-
-  const getRemainingText = (type: string) => {
+  const getRemainingText = (type: 'daily' | 'three_cards' | 'yesno') => {
     const remaining = getRemainingCount(type);
-    
-    // Если у пользователя есть подписка - не показываем счетчик
     if (subscriptionInfo?.hasSubscription) return '';
-    
-    // Неограниченно (для бесплатных функций с подпиской)
     if (remaining === -1) return '';
-    
-    // Использовано
-    if (remaining === 0) return 'Использовано';
-    
-    // Осталось N раскладов
-    return `Осталось: ${remaining}`;
+    if (remaining === 0) {
+      const hours = getCooldownHoursRemaining(type);
+      return hours > 0 ? `Использовано (осталось ${hours} ч)` : 'Использовано';
+    }
+    return 'Доступно';
   };
 
   return (
@@ -489,8 +526,8 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
         <div className="w-full max-w-sm space-y-4 mt-8">
           {/* One Card Button */}
           <motion.div 
-            whileHover={{ scale: (subscriptionInfo?.hasSubscription || (subscriptionInfo?.remainingDailyAdvice ?? 0) > 0 && subscriptionInfo?.canUseDailyAdvice) ? 1.02 : 1 }} 
-            whileTap={{ scale: (subscriptionInfo?.hasSubscription || (subscriptionInfo?.remainingDailyAdvice ?? 0) > 0 && subscriptionInfo?.canUseDailyAdvice) ? 0.98 : 1 }}
+            whileHover={{ scale: (!isTypeDisabled('daily')) ? 1.02 : 1 }} 
+            whileTap={{ scale: (!isTypeDisabled('daily')) ? 0.98 : 1 }}
             className="relative"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -498,21 +535,21 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
           >
             <Button
               onClick={handleOneCardClick}
-              disabled={subscriptionInfo?.hasSubscription ? false : ((subscriptionInfo?.remainingDailyAdvice ?? 0) === 0 || !subscriptionInfo?.canUseDailyAdvice)}
+              disabled={isTypeDisabled('daily')}
               className={`w-full h-20 text-white border-2 rounded-3xl shadow-xl transition-all duration-300 backdrop-blur-sm ${
-                subscriptionInfo?.hasSubscription || ((subscriptionInfo?.remainingDailyAdvice ?? 0) > 0 && subscriptionInfo?.canUseDailyAdvice)
+                !isTypeDisabled('daily')
                   ? 'bg-slate-800/50 hover:bg-slate-700/50 border-amber-400/30 hover:border-amber-400/50 hover:shadow-2xl cursor-pointer'
                   : 'bg-slate-800/30 border-slate-600/30 opacity-60 cursor-not-allowed pointer-events-none'
               }`}
-              style={{ pointerEvents: (subscriptionInfo?.hasSubscription || (subscriptionInfo?.remainingDailyAdvice ?? 0) > 0 && subscriptionInfo?.canUseDailyAdvice) ? 'auto' : 'none' }}
+              style={{ pointerEvents: (!isTypeDisabled('daily')) ? 'auto' : 'none' }}
             >
               <div className="flex items-center space-x-6 w-full pl-2">
                 <div className={`p-3 rounded-2xl border flex-shrink-0 ${
-                  subscriptionInfo?.hasSubscription || ((subscriptionInfo?.remainingDailyAdvice ?? 0) > 0 && subscriptionInfo?.canUseDailyAdvice)
+                  !isTypeDisabled('daily')
                     ? 'bg-amber-600/20 border-amber-400/30'
                     : 'bg-slate-600/20 border-slate-500/30'
                 }`}>
-                  {subscriptionInfo?.hasSubscription || ((subscriptionInfo?.remainingDailyAdvice ?? 0) > 0 && subscriptionInfo?.canUseDailyAdvice) ? (
+                  {!isTypeDisabled('daily') ? (
                     <SparklesIcon className="w-6 h-6 text-amber-400" />
                   ) : (
                     <Lock className="w-6 h-6 text-slate-400" />
@@ -520,10 +557,10 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
                 </div>
                 <div className="text-left flex-1">
                   <div className={`text-lg font-semibold ${
-                    subscriptionInfo?.hasSubscription || ((subscriptionInfo?.remainingDailyAdvice ?? 0) > 0 && subscriptionInfo?.canUseDailyAdvice) ? 'text-white' : 'text-slate-400'
+                    !isTypeDisabled('daily') ? 'text-white' : 'text-slate-400'
                   }`}>Одна карта</div>
                   <div className={`text-sm ${
-                    subscriptionInfo?.hasSubscription || ((subscriptionInfo?.remainingDailyAdvice ?? 0) > 0 && subscriptionInfo?.canUseDailyAdvice) ? 'text-gray-300' : 'text-slate-500'
+                    !isTypeDisabled('daily') ? 'text-gray-300' : 'text-slate-500'
                   }`}>Совет дня</div>
                   {!subscriptionInfo?.hasSubscription && (
                     <div className="text-xs text-amber-400 mt-1">
@@ -537,8 +574,8 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
 
           {/* Yes/No Button */}
           <motion.div 
-            whileHover={{ scale: subscriptionInfo?.canUseYesNo || subscriptionInfo?.hasSubscription ? 1.02 : 1 }} 
-            whileTap={{ scale: subscriptionInfo?.canUseYesNo || subscriptionInfo?.hasSubscription ? 0.98 : 1 }}
+            whileHover={{ scale: (!isTypeDisabled('yesno')) ? 1.02 : 1 }} 
+            whileTap={{ scale: (!isTypeDisabled('yesno')) ? 0.98 : 1 }}
             className="relative"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -546,20 +583,20 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
           >
             <Button
               onClick={handleYesNoClick}
-              disabled={!subscriptionInfo?.canUseYesNo && !subscriptionInfo?.hasSubscription}
+              disabled={isTypeDisabled('yesno')}
               className={`w-full h-20 text-white border-2 rounded-3xl shadow-xl transition-all duration-300 backdrop-blur-sm ${
-                subscriptionInfo?.canUseYesNo || subscriptionInfo?.hasSubscription
+                !isTypeDisabled('yesno')
                   ? 'bg-slate-800/50 hover:bg-slate-700/50 border-emerald-400/30 hover:border-emerald-400/50 hover:shadow-2xl'
                   : 'bg-slate-800/30 border-slate-600/30 opacity-60'
               }`}
             >
               <div className="flex items-center space-x-6 w-full pl-2">
                 <div className={`p-3 rounded-2xl border flex-shrink-0 ${
-                  subscriptionInfo?.canUseYesNo || subscriptionInfo?.hasSubscription
+                  !isTypeDisabled('yesno')
                     ? 'bg-emerald-600/20 border-emerald-400/30'
                     : 'bg-slate-600/20 border-slate-500/30'
                 }`}>
-                  {subscriptionInfo?.canUseYesNo || subscriptionInfo?.hasSubscription ? (
+                  {!isTypeDisabled('yesno') ? (
                     <HelpCircle className="w-6 h-6 text-emerald-400" />
                   ) : (
                     <Lock className="w-6 h-6 text-slate-400" />
@@ -567,10 +604,10 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
                 </div>
                 <div className="text-left flex-1">
                   <div className={`text-lg font-semibold ${
-                    subscriptionInfo?.canUseYesNo || subscriptionInfo?.hasSubscription ? 'text-white' : 'text-slate-400'
+                    !isTypeDisabled('yesno') ? 'text-white' : 'text-slate-400'
                   }`}>Да/Нет</div>
                   <div className={`text-sm ${
-                    subscriptionInfo?.canUseYesNo || subscriptionInfo?.hasSubscription ? 'text-gray-300' : 'text-slate-500'
+                    !isTypeDisabled('yesno') ? 'text-gray-300' : 'text-slate-500'
                   }`}>Быстрый ответ</div>
                   {!subscriptionInfo?.hasSubscription && (
                     <div className="text-xs text-emerald-400 mt-1">
@@ -584,8 +621,8 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
 
           {/* Three Cards Button */}
           <motion.div 
-            whileHover={{ scale: subscriptionInfo?.canUseThreeCards || subscriptionInfo?.hasSubscription ? 1.02 : 1 }} 
-            whileTap={{ scale: subscriptionInfo?.canUseThreeCards || subscriptionInfo?.hasSubscription ? 0.98 : 1 }}
+            whileHover={{ scale: (!isTypeDisabled('three_cards')) ? 1.02 : 1 }} 
+            whileTap={{ scale: (!isTypeDisabled('three_cards')) ? 0.98 : 1 }}
             className="relative"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -593,20 +630,20 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
           >
             <Button
               onClick={handleThreeCardsClick}
-              disabled={!subscriptionInfo?.canUseThreeCards && !subscriptionInfo?.hasSubscription}
+              disabled={isTypeDisabled('three_cards')}
               className={`w-full h-20 text-white border-2 rounded-3xl shadow-xl transition-all duration-300 backdrop-blur-sm ${
-                subscriptionInfo?.canUseThreeCards || subscriptionInfo?.hasSubscription
+                !isTypeDisabled('three_cards')
                   ? 'bg-slate-800/50 hover:bg-slate-700/50 border-purple-400/30 hover:border-purple-400/50 hover:shadow-2xl'
                   : 'bg-slate-800/30 border-slate-600/30 opacity-60'
               }`}
             >
               <div className="flex items-center space-x-6 w-full pl-2">
                 <div className={`p-3 rounded-2xl border flex-shrink-0 ${
-                  subscriptionInfo?.canUseThreeCards || subscriptionInfo?.hasSubscription
+                  !isTypeDisabled('three_cards')
                     ? 'bg-purple-600/20 border-purple-400/30'
                     : 'bg-slate-600/20 border-slate-500/30'
                 }`}>
-                  {subscriptionInfo?.canUseThreeCards || subscriptionInfo?.hasSubscription ? (
+                  {!isTypeDisabled('three_cards') ? (
                     <Calendar className="w-6 h-6 text-purple-400" />
                   ) : (
                     <Lock className="w-6 h-6 text-slate-400" />
@@ -614,10 +651,10 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
                 </div>
                 <div className="text-left flex-1">
                   <div className={`text-lg font-semibold ${
-                    subscriptionInfo?.canUseThreeCards || subscriptionInfo?.hasSubscription ? 'text-white' : 'text-slate-400'
+                    !isTypeDisabled('three_cards') ? 'text-white' : 'text-slate-400'
                   }`}>Три карты</div>
                   <div className={`text-sm ${
-                    subscriptionInfo?.canUseThreeCards || subscriptionInfo?.hasSubscription ? 'text-gray-300' : 'text-slate-500'
+                    !isTypeDisabled('three_cards') ? 'text-gray-300' : 'text-slate-500'
                   }`}>Прошлое–Настоящее–Будущее</div>
                   {!subscriptionInfo?.hasSubscription && (
                     <div className="text-xs text-purple-400 mt-1">

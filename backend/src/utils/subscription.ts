@@ -8,6 +8,26 @@ export interface SubscriptionStatus {
   daysRemaining?: number;
 }
 
+const COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 часа
+
+function getCooldownMsRemaining(lastDate: Date | null | undefined, now: Date): number {
+  if (!lastDate) return 0;
+  const lastTime = lastDate.getTime();
+  const nowTime = now.getTime();
+
+  // Если дата в будущем (кривые данные/часы) — не блокируем
+  if (lastTime > nowTime) return 0;
+
+  const elapsed = nowTime - lastTime;
+  if (elapsed >= COOLDOWN_MS) return 0;
+  return COOLDOWN_MS - elapsed;
+}
+
+function getCooldownHoursRemaining(msRemaining: number): number {
+  if (msRemaining <= 0) return 0;
+  return Math.ceil(msRemaining / (60 * 60 * 1000));
+}
+
 /**
  * Проверяет статус подписки пользователя
  */
@@ -122,30 +142,21 @@ export async function hasUsedFreeYesNo(telegramId: number): Promise<boolean> {
       return false;
     }
     
-    const today = new Date();
+    const now = new Date();
     const lastDate = new Date(user.lastYesNoDate);
-    
-    // Нормализуем даты до UTC, чтобы избежать проблем с часовыми поясами
-    // Используем начало дня в UTC для обеих дат
-    const todayUTC = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
-    const lastDateUTC = new Date(Date.UTC(lastDate.getUTCFullYear(), lastDate.getUTCMonth(), lastDate.getUTCDate()));
-    
-    const isSameDay = todayUTC.getTime() === lastDateUTC.getTime();
-    
-    // Дополнительная проверка: если дата в будущем, считаем что не использовано
-    const isFuture = lastDateUTC.getTime() > todayUTC.getTime();
+    const msRemaining = getCooldownMsRemaining(lastDate, now);
+    const willReturn = msRemaining > 0;
     
     logger.info('hasUsedFreeYesNo check', { 
-      telegramId, 
-      today: todayUTC.toISOString(), 
-      lastDate: lastDateUTC.toISOString(),
+      telegramId,
+      now: now.toISOString(),
       lastYesNoDateRaw: user.lastYesNoDate?.toISOString(),
-      isSameDay,
-      isFuture,
-      willReturn: isSameDay && !isFuture
+      msRemaining,
+      hoursRemaining: getCooldownHoursRemaining(msRemaining),
+      willReturn
     });
     
-    return isSameDay && !isFuture;
+    return willReturn;
   } catch (error) {
     logger.error('Error checking free Yes/No usage', { error, telegramId });
     return false;
@@ -197,30 +208,21 @@ export async function hasUsedDailyAdviceToday(telegramId: number): Promise<boole
       return false;
     }
     
-    const today = new Date();
+    const now = new Date();
     const lastDate = new Date(user.lastDailyAdviceDate);
-    
-    // Нормализуем даты до UTC, чтобы избежать проблем с часовыми поясами
-    // Используем начало дня в UTC для обеих дат
-    const todayUTC = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
-    const lastDateUTC = new Date(Date.UTC(lastDate.getUTCFullYear(), lastDate.getUTCMonth(), lastDate.getUTCDate()));
-    
-    const isSameDay = todayUTC.getTime() === lastDateUTC.getTime();
-    
-    // Дополнительная проверка: если дата в будущем, считаем что не использовано
-    const isFuture = lastDateUTC.getTime() > todayUTC.getTime();
+    const msRemaining = getCooldownMsRemaining(lastDate, now);
+    const willReturn = msRemaining > 0;
     
     logger.info('hasUsedDailyAdviceToday check', { 
-      telegramId, 
-      today: todayUTC.toISOString(), 
-      lastDate: lastDateUTC.toISOString(),
+      telegramId,
+      now: now.toISOString(),
       lastDailyAdviceDateRaw: user.lastDailyAdviceDate?.toISOString(),
-      isSameDay,
-      isFuture,
-      willReturn: isSameDay && !isFuture
+      msRemaining,
+      hoursRemaining: getCooldownHoursRemaining(msRemaining),
+      willReturn
     });
     
-    return isSameDay && !isFuture;
+    return willReturn;
   } catch (error) {
     logger.error('Error checking daily advice usage', { error, telegramId });
     return false;
@@ -266,33 +268,64 @@ export async function hasUsedThreeCardsToday(telegramId: number): Promise<boolea
       return false;
     }
     
-    const today = new Date();
+    const now = new Date();
     const lastDate = new Date(user.lastThreeCardsDate);
-    
-    // Нормализуем даты до UTC, чтобы избежать проблем с часовыми поясами
-    // Используем начало дня в UTC для обеих дат
-    const todayUTC = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
-    const lastDateUTC = new Date(Date.UTC(lastDate.getUTCFullYear(), lastDate.getUTCMonth(), lastDate.getUTCDate()));
-    
-    const isSameDay = todayUTC.getTime() === lastDateUTC.getTime();
-    
-    // Дополнительная проверка: если дата в будущем, считаем что не использовано
-    const isFuture = lastDateUTC.getTime() > todayUTC.getTime();
+    const msRemaining = getCooldownMsRemaining(lastDate, now);
+    const willReturn = msRemaining > 0;
     
     logger.info('hasUsedThreeCardsToday check', { 
-      telegramId, 
-      today: todayUTC.toISOString(), 
-      lastDate: lastDateUTC.toISOString(),
+      telegramId,
+      now: now.toISOString(),
       lastThreeCardsDateRaw: user.lastThreeCardsDate?.toISOString(),
-      isSameDay,
-      isFuture,
-      willReturn: isSameDay && !isFuture
+      msRemaining,
+      hoursRemaining: getCooldownHoursRemaining(msRemaining),
+      willReturn
     });
     
-    return isSameDay && !isFuture;
+    return willReturn;
   } catch (error) {
     logger.error('Error checking three cards usage', { error, telegramId });
     return false;
+  }
+}
+
+/**
+ * Возвращает статус отката (cooldown) по всем бесплатным раскладам для пользователя.
+ * Используется в /subscription-status, чтобы фронт мог показать "осталось X часов".
+ */
+export async function getFreeUsageCooldowns(telegramId: number): Promise<{
+  dailyAdviceMsRemaining: number;
+  yesNoMsRemaining: number;
+  threeCardsMsRemaining: number;
+  dailyAdviceHoursRemaining: number;
+  yesNoHoursRemaining: number;
+  threeCardsHoursRemaining: number;
+}> {
+  const now = new Date();
+  try {
+    const user = await User.findOne({ telegramId });
+    const dailyAdviceMsRemaining = getCooldownMsRemaining(user?.lastDailyAdviceDate, now);
+    const yesNoMsRemaining = getCooldownMsRemaining(user?.lastYesNoDate, now);
+    const threeCardsMsRemaining = getCooldownMsRemaining(user?.lastThreeCardsDate, now);
+
+    return {
+      dailyAdviceMsRemaining,
+      yesNoMsRemaining,
+      threeCardsMsRemaining,
+      dailyAdviceHoursRemaining: getCooldownHoursRemaining(dailyAdviceMsRemaining),
+      yesNoHoursRemaining: getCooldownHoursRemaining(yesNoMsRemaining),
+      threeCardsHoursRemaining: getCooldownHoursRemaining(threeCardsMsRemaining),
+    };
+  } catch (error) {
+    logger.error('Error getting free usage cooldowns', { error, telegramId });
+    return {
+      dailyAdviceMsRemaining: 0,
+      yesNoMsRemaining: 0,
+      threeCardsMsRemaining: 0,
+      dailyAdviceHoursRemaining: 0,
+      yesNoHoursRemaining: 0,
+      threeCardsHoursRemaining: 0,
+    };
   }
 }
 

@@ -10,7 +10,8 @@ import {
   hasUsedDailyAdviceToday,
   markDailyAdviceUsed,
   hasUsedThreeCardsToday,
-  markThreeCardsUsed
+  markThreeCardsUsed,
+  getFreeUsageCooldowns
 } from '../utils/subscription';
 import { TarotReading } from '../models/TarotReading';
 import logger from '../utils/logger';
@@ -38,20 +39,22 @@ router.get('/daily-card', async (req: any, res) => {
       adminIdString: adminTelegramId?.toString()
     });
     
-    // Проверяем подписку
+    // Проверяем подписку и лимит для бесплатных пользователей (1 раз в 24 часа)
     const subscriptionStatus = await checkSubscriptionStatus(userId);
+    const hasUsedToday = await hasUsedDailyAdviceToday(userId);
     
     logger.info('Daily advice subscription check', {
       userId,
       hasSubscription: subscriptionStatus.hasSubscription,
       isAdmin,
-      willAllow: subscriptionStatus.hasSubscription || isAdmin
+      hasUsedToday,
+      willAllow: subscriptionStatus.hasSubscription || isAdmin || !hasUsedToday
     });
     
-    if (!subscriptionStatus.hasSubscription && !isAdmin) {
+    if (!subscriptionStatus.hasSubscription && !isAdmin && hasUsedToday) {
       return res.status(403).json({
         success: false,
-        error: 'Subscription required',
+        error: 'Daily advice already used. Please wait 24 hours or subscribe for unlimited access.',
         subscriptionRequired: true
       });
     }
@@ -77,11 +80,17 @@ router.get('/daily-card', async (req: any, res) => {
       isReversed
     });
 
-    if (!interpretation.success) {
+    if (!interpretation.success || !interpretation.interpretation) {
       return res.status(500).json({
         success: false,
         error: 'Failed to get card interpretation'
       });
+    }
+
+    // Отмечаем использование Daily Advice для бесплатных пользователей ПОСЛЕ успешного получения интерпретации
+    if (!subscriptionStatus.hasSubscription && !isAdmin) {
+      await markDailyAdviceUsed(userId);
+      logger.info('Daily Advice marked as used for free user', { telegramId: userId });
     }
 
     res.json({
@@ -117,20 +126,22 @@ router.post('/daily-advice', async (req: any, res) => {
       adminIdString: adminTelegramId?.toString()
     });
     
-    // Проверяем подписку
+    // Проверяем подписку и лимит для бесплатных пользователей (1 раз в 24 часа)
     const subscriptionStatus = await checkSubscriptionStatus(userId);
+    const hasUsedToday = await hasUsedDailyAdviceToday(userId);
     
     logger.info('Daily advice subscription check', {
       userId,
       hasSubscription: subscriptionStatus.hasSubscription,
       isAdmin,
-      willAllow: subscriptionStatus.hasSubscription || isAdmin
+      hasUsedToday,
+      willAllow: subscriptionStatus.hasSubscription || isAdmin || !hasUsedToday
     });
     
-    if (!subscriptionStatus.hasSubscription && !isAdmin) {
+    if (!subscriptionStatus.hasSubscription && !isAdmin && hasUsedToday) {
       return res.status(403).json({
         success: false,
-        error: 'Subscription required',
+        error: 'Daily advice already used. Please wait 24 hours or subscribe for unlimited access.',
         subscriptionRequired: true
       });
     }
@@ -164,67 +175,64 @@ router.post('/daily-advice', async (req: any, res) => {
     }
     const imagePath = getCardImagePath(randomCard, isReversed);
 
-    // Сохраняем расклад
-    try {
-      if (interpretation.interpretation && interpretation.interpretation.trim().length > 0) {
-        logger.info('Attempting to save daily-advice reading', {
-          userId: req.user.userId,
-          telegramId: userId,
-          cardName: randomCard,
-          hasInterpretation: !!interpretation.interpretation
-        });
-        
-        const saved = await openAIService.saveReading(
-          req.user.userId,
-          userId,
-          {
-            cards: [{
-              name: randomCard, // Английское название для сохранения
-              position: 'daily',
-              isReversed: isReversed
-            }],
-            question: '', // Daily advice не имеет вопроса
-            readingType: 'single'
-          },
-          interpretation.interpretation
-        );
-        if (!saved) {
-          logger.warn('Failed to save daily-advice reading', { 
-            userId: req.user.userId, 
-            telegramId: userId,
-            cardName: randomCard
-          });
-        } else {
-          logger.info('Daily-advice reading saved successfully', { 
-            userId: req.user.userId, 
-            telegramId: userId,
-            cardName: randomCard
-          });
-          
-          // Сразу проверяем, что запись действительно в БД
-          const verifyCount = await TarotReading.countDocuments({ 
-            telegramId: userId,
-            readingType: 'single'
-          });
-          logger.info('Verification: readings count for this user after save', {
+    // Отмечаем использование Daily Advice для бесплатных пользователей ПОСЛЕ успешного получения интерпретации
+    if (!subscriptionStatus.hasSubscription && !isAdmin) {
+      await markDailyAdviceUsed(userId);
+      logger.info('Daily Advice marked as used for free user', { telegramId: userId });
+    }
+
+    // Сохраняем расклад ТОЛЬКО для пользователей с подпиской (и админа)
+    if (subscriptionStatus.hasSubscription || isAdmin) {
+      try {
+        if (interpretation.interpretation && interpretation.interpretation.trim().length > 0) {
+          logger.info('Attempting to save daily-advice reading', {
             userId: req.user.userId,
             telegramId: userId,
-            count: verifyCount
+            cardName: randomCard,
+            hasInterpretation: !!interpretation.interpretation
+          });
+          
+          const saved = await openAIService.saveReading(
+            req.user.userId,
+            userId,
+            {
+              cards: [{
+                name: randomCard, // Английское название для сохранения
+                position: 'daily',
+                isReversed: isReversed
+              }],
+              question: '', // Daily advice не имеет вопроса
+              readingType: 'single'
+            },
+            interpretation.interpretation
+          );
+          if (!saved) {
+            logger.warn('Failed to save daily-advice reading', { 
+              userId: req.user.userId, 
+              telegramId: userId,
+              cardName: randomCard
+            });
+          } else {
+            logger.info('Daily-advice reading saved successfully', { 
+              userId: req.user.userId, 
+              telegramId: userId,
+              cardName: randomCard
+            });
+          }
+        } else {
+          logger.warn('Skipping save: interpretation is empty', { 
+            userId: req.user.userId, 
+            telegramId: userId 
           });
         }
-      } else {
-        logger.warn('Skipping save: interpretation is empty', { 
+      } catch (saveError) {
+        logger.error('Error saving daily-advice reading', { 
+          error: saveError, 
           userId: req.user.userId, 
-          telegramId: userId 
+          telegramId: userId,
+          errorMessage: saveError instanceof Error ? saveError.message : String(saveError)
         });
       }
-    } catch (saveError) {
-      logger.error('Error saving daily-advice reading', { 
-        error: saveError, 
-        userId: req.user.userId, 
-        telegramId: userId,
-        errorMessage: saveError instanceof Error ? saveError.message : String(saveError)
-      });
     }
 
     // Формируем ответ в формате, который ожидает фронтенд
@@ -260,7 +268,7 @@ router.post('/daily-advice', async (req: any, res) => {
 router.post('/three-cards', async (req: any, res) => {
   try {
     const userId = req.user.telegramId;
-    const { question } = req.body;
+    const question = req.body?.question || req.body?.userQuestion || '';
     
     // Проверяем, является ли пользователь администратором
     const adminTelegramId = process.env.ADMIN_TELEGRAM_ID;
@@ -274,20 +282,22 @@ router.post('/three-cards', async (req: any, res) => {
       adminIdString: adminTelegramId?.toString()
     });
     
-    // Проверяем подписку
+    // Проверяем подписку и лимит для бесплатных пользователей (1 раз в 24 часа)
     const subscriptionStatus = await checkSubscriptionStatus(userId);
+    const hasUsedToday = await hasUsedThreeCardsToday(userId);
     
     logger.info('Three cards subscription check', {
       userId,
       hasSubscription: subscriptionStatus.hasSubscription,
       isAdmin,
-      willAllow: subscriptionStatus.hasSubscription || isAdmin
+      hasUsedToday,
+      willAllow: subscriptionStatus.hasSubscription || isAdmin || !hasUsedToday
     });
     
-    if (!subscriptionStatus.hasSubscription && !isAdmin) {
+    if (!subscriptionStatus.hasSubscription && !isAdmin && hasUsedToday) {
       return res.status(403).json({
         success: false,
-        error: 'Subscription required',
+        error: 'Three cards already used. Please wait 24 hours or subscribe for unlimited access.',
         subscriptionRequired: true
       });
     }
@@ -360,63 +370,60 @@ router.post('/three-cards', async (req: any, res) => {
       });
     }
 
-    // Сохраняем расклад (используем английские названия для сохранения)
-    try {
-      if (interpretation.interpretation && interpretation.interpretation.trim().length > 0) {
-        logger.info('Attempting to save three-cards reading', {
-          userId: req.user.userId,
-          telegramId: userId,
-          cardsCount: selectedCardsForAPI.length,
-          hasInterpretation: !!interpretation.interpretation
-        });
-        
-        const saved = await openAIService.saveReading(
-          req.user.userId,
-          userId,
-          {
-            cards: selectedCardsForAPI,
-            question,
-            readingType: 'three'
-          },
-          interpretation.interpretation
-        );
-        if (!saved) {
-          logger.warn('Failed to save three-cards reading', { 
-            userId: req.user.userId, 
-            telegramId: userId,
-            cardsCount: selectedCardsForAPI.length
-          });
-        } else {
-          logger.info('Three-cards reading saved successfully', { 
-            userId: req.user.userId, 
-            telegramId: userId,
-            cardsCount: selectedCardsForAPI.length
-          });
-          
-          // Сразу проверяем, что запись действительно в БД
-          const verifyCount = await TarotReading.countDocuments({ 
-            telegramId: userId,
-            readingType: 'three'
-          });
-          logger.info('Verification: readings count for this user after save', {
+    // Отмечаем использование Three Cards для бесплатных пользователей ПОСЛЕ успешного получения интерпретации
+    if (!subscriptionStatus.hasSubscription && !isAdmin) {
+      await markThreeCardsUsed(userId);
+      logger.info('Three Cards marked as used for free user', { telegramId: userId });
+    }
+
+    // Сохраняем расклад ТОЛЬКО для пользователей с подпиской (и админа)
+    if (subscriptionStatus.hasSubscription || isAdmin) {
+      try {
+        if (interpretation.interpretation && interpretation.interpretation.trim().length > 0) {
+          logger.info('Attempting to save three-cards reading', {
             userId: req.user.userId,
             telegramId: userId,
-            count: verifyCount
+            cardsCount: selectedCardsForAPI.length,
+            hasInterpretation: !!interpretation.interpretation
+          });
+          
+          const saved = await openAIService.saveReading(
+            req.user.userId,
+            userId,
+            {
+              cards: selectedCardsForAPI,
+              question,
+              readingType: 'three'
+            },
+            interpretation.interpretation
+          );
+          if (!saved) {
+            logger.warn('Failed to save three-cards reading', { 
+              userId: req.user.userId, 
+              telegramId: userId,
+              cardsCount: selectedCardsForAPI.length
+            });
+          } else {
+            logger.info('Three-cards reading saved successfully', { 
+              userId: req.user.userId, 
+              telegramId: userId,
+              cardsCount: selectedCardsForAPI.length
+            });
+          }
+        } else {
+          logger.warn('Skipping save: interpretation is empty', { 
+            userId: req.user.userId, 
+            telegramId: userId 
           });
         }
-      } else {
-        logger.warn('Skipping save: interpretation is empty', { 
+      } catch (saveError) {
+        logger.error('Error saving three-cards reading', { 
+          error: saveError, 
           userId: req.user.userId, 
-          telegramId: userId 
+          telegramId: userId,
+          errorMessage: saveError instanceof Error ? saveError.message : String(saveError)
         });
       }
-    } catch (saveError) {
-      logger.error('Error saving three-cards reading', { 
-        error: saveError, 
-        userId: req.user.userId, 
-        telegramId: userId,
-        errorMessage: saveError instanceof Error ? saveError.message : String(saveError)
-      });
     }
 
     res.json({
@@ -669,6 +676,19 @@ router.post('/yes-no', async (req: any, res) => {
 router.get('/history', async (req: any, res) => {
   try {
     const userId = req.user.telegramId;
+
+    // История доступна только подписчикам (и админу)
+    const adminTelegramId = process.env.ADMIN_TELEGRAM_ID;
+    const isAdmin = adminTelegramId && userId.toString() === adminTelegramId.toString();
+    const subscriptionStatus = await checkSubscriptionStatus(userId);
+    if (!subscriptionStatus.hasSubscription && !isAdmin) {
+      return res.status(403).json({
+        success: false,
+        error: 'Reading history is available only for subscribers.',
+        subscriptionRequired: true
+      });
+    }
+
     // Увеличиваем лимит по умолчанию до 50, чтобы показывать больше записей
     const { page = 1, limit = 50 } = req.query;
     
@@ -1007,9 +1027,10 @@ router.get('/subscription-status', async (req: any, res) => {
     
     // Проверяем подписку
     const subscriptionStatus = await checkSubscriptionStatus(userId);
-    const hasUsedDailyAdviceTodayValue = await hasUsedDailyAdviceToday(userId);
-    const hasUsedYesNoToday = await hasUsedFreeYesNo(userId);
-    const hasUsedThreeCardsTodayValue = await hasUsedThreeCardsToday(userId);
+    const cooldowns = await getFreeUsageCooldowns(userId);
+    const hasUsedDailyAdviceTodayValue = cooldowns.dailyAdviceMsRemaining > 0;
+    const hasUsedYesNoToday = cooldowns.yesNoMsRemaining > 0;
+    const hasUsedThreeCardsTodayValue = cooldowns.threeCardsMsRemaining > 0;
     
     logger.info('Subscription status check details', {
       userId,
@@ -1018,12 +1039,13 @@ router.get('/subscription-status', async (req: any, res) => {
       hasUsedDailyAdviceToday: hasUsedDailyAdviceTodayValue,
       hasUsedYesNoToday,
       hasUsedThreeCardsToday: hasUsedThreeCardsTodayValue,
+      cooldowns,
       codeVersion: '2026-01-12-v3' // Маркер версии для проверки деплоя
     });
     
     // Формируем ответ в формате, который ожидает фронтенд
     // Администратор всегда имеет доступ ко всем раскладам
-    // Для бесплатных пользователей: 1 раз в день для каждого типа
+    // Для бесплатных пользователей: 1 раз в 24 часа для каждого типа (независимо)
     const remainingDailyAdvice = isAdmin ? -1 : (subscriptionStatus.hasSubscription ? -1 : (hasUsedDailyAdviceTodayValue ? 0 : 1));
     const remainingYesNo = isAdmin ? -1 : (subscriptionStatus.hasSubscription ? -1 : (hasUsedYesNoToday ? 0 : 1));
     const remainingThreeCards = isAdmin ? -1 : (subscriptionStatus.hasSubscription ? -1 : (hasUsedThreeCardsTodayValue ? 0 : 1));
@@ -1037,6 +1059,7 @@ router.get('/subscription-status', async (req: any, res) => {
       remainingDailyAdvice,
       remainingYesNo,
       remainingThreeCards,
+      cooldowns,
     };
     
     logger.info('Subscription info response', {
