@@ -1027,6 +1027,7 @@ router.get('/history', async (req: any, res) => {
 // Получить статус подписки (для фронтенда)
 router.get('/subscription-status', async (req: any, res) => {
   try {
+    const start = Date.now();
     const userId = req.user.telegramId;
     
     // Проверяем, является ли пользователь администратором (безлимитный доступ)
@@ -1045,16 +1046,61 @@ router.get('/subscription-status', async (req: any, res) => {
       comparison: `${userId.toString()} === ${adminTelegramId?.toString()}`
     });
     
-    // Проверяем подписку
-    const subscriptionStatus = await checkSubscriptionStatus(userId);
-    const cooldowns = await getFreeUsageCooldowns(userId);
+    // Максимально быстрый путь: используем пользователя, уже загруженного в authenticateToken (без повторных запросов к БД)
+    // Фоллбек: если userRecord по какой-то причине не проставлен — делаем ОДИН lean-запрос по индексу telegramId
+    let u = req.userRecord;
+    if (!u) {
+      const { User } = await import('../models/User');
+      u = await User.findOne({ telegramId: userId })
+        .select('telegramId subscriptionStatus subscriptionExpiresAt lastDailyAdviceDate lastYesNoDate lastThreeCardsDate')
+        .lean();
+      req.userRecord = u;
+    }
+    if (!u) {
+      return res.status(401).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+
+    const now = new Date();
+    const hasSubscription =
+      isAdmin ||
+      (u?.subscriptionStatus === 1 &&
+        u?.subscriptionExpiresAt &&
+        new Date(u.subscriptionExpiresAt).getTime() > now.getTime());
+
+    const COOLDOWN_MS = 24 * 60 * 60 * 1000;
+    const msRemaining = (last: any) => {
+      if (!last) return 0;
+      const lastTime = new Date(last).getTime();
+      const nowTime = now.getTime();
+      if (lastTime > nowTime) return 0;
+      const elapsed = nowTime - lastTime;
+      if (elapsed >= COOLDOWN_MS) return 0;
+      return COOLDOWN_MS - elapsed;
+    };
+    const hoursRemaining = (ms: number) => (ms <= 0 ? 0 : Math.ceil(ms / (60 * 60 * 1000)));
+
+    const cooldowns = {
+      dailyAdviceMsRemaining: msRemaining(u?.lastDailyAdviceDate),
+      yesNoMsRemaining: msRemaining(u?.lastYesNoDate),
+      threeCardsMsRemaining: msRemaining(u?.lastThreeCardsDate),
+      dailyAdviceHoursRemaining: 0,
+      yesNoHoursRemaining: 0,
+      threeCardsHoursRemaining: 0,
+    };
+    cooldowns.dailyAdviceHoursRemaining = hoursRemaining(cooldowns.dailyAdviceMsRemaining);
+    cooldowns.yesNoHoursRemaining = hoursRemaining(cooldowns.yesNoMsRemaining);
+    cooldowns.threeCardsHoursRemaining = hoursRemaining(cooldowns.threeCardsMsRemaining);
+
     const hasUsedDailyAdviceTodayValue = cooldowns.dailyAdviceMsRemaining > 0;
     const hasUsedYesNoToday = cooldowns.yesNoMsRemaining > 0;
     const hasUsedThreeCardsTodayValue = cooldowns.threeCardsMsRemaining > 0;
     
     logger.info('Subscription status check details', {
       userId,
-      hasSubscription: subscriptionStatus.hasSubscription,
+      hasSubscription,
       isAdmin,
       hasUsedDailyAdviceToday: hasUsedDailyAdviceTodayValue,
       hasUsedYesNoToday,
@@ -1066,16 +1112,16 @@ router.get('/subscription-status', async (req: any, res) => {
     // Формируем ответ в формате, который ожидает фронтенд
     // Администратор всегда имеет доступ ко всем раскладам
     // Для бесплатных пользователей: 1 раз в 24 часа для каждого типа (независимо)
-    const remainingDailyAdvice = isAdmin ? -1 : (subscriptionStatus.hasSubscription ? -1 : (hasUsedDailyAdviceTodayValue ? 0 : 1));
-    const remainingYesNo = isAdmin ? -1 : (subscriptionStatus.hasSubscription ? -1 : (hasUsedYesNoToday ? 0 : 1));
-    const remainingThreeCards = isAdmin ? -1 : (subscriptionStatus.hasSubscription ? -1 : (hasUsedThreeCardsTodayValue ? 0 : 1));
+    const remainingDailyAdvice = isAdmin ? -1 : (hasSubscription ? -1 : (hasUsedDailyAdviceTodayValue ? 0 : 1));
+    const remainingYesNo = isAdmin ? -1 : (hasSubscription ? -1 : (hasUsedYesNoToday ? 0 : 1));
+    const remainingThreeCards = isAdmin ? -1 : (hasSubscription ? -1 : (hasUsedThreeCardsTodayValue ? 0 : 1));
     
     const subscriptionInfo = {
-      hasSubscription: subscriptionStatus.hasSubscription || isAdmin,
+      hasSubscription,
       // canUseDailyAdvice должен быть false если remainingDailyAdvice === 0
-      canUseDailyAdvice: subscriptionStatus.hasSubscription || isAdmin || remainingDailyAdvice > 0,
-      canUseYesNo: subscriptionStatus.hasSubscription || isAdmin || remainingYesNo > 0,
-      canUseThreeCards: subscriptionStatus.hasSubscription || isAdmin || remainingThreeCards > 0,
+      canUseDailyAdvice: hasSubscription || isAdmin || remainingDailyAdvice > 0,
+      canUseYesNo: hasSubscription || isAdmin || remainingYesNo > 0,
+      canUseThreeCards: hasSubscription || isAdmin || remainingThreeCards > 0,
       remainingDailyAdvice,
       remainingYesNo,
       remainingThreeCards,
@@ -1102,6 +1148,8 @@ router.get('/subscription-status', async (req: any, res) => {
       success: true,
       subscriptionInfo
     });
+
+    logger.info('Subscription status response sent', { userId, durationMs: Date.now() - start });
   } catch (error) {
     logger.error('Subscription status error', { error, userId: req.user?.telegramId });
     res.status(500).json({

@@ -9,6 +9,8 @@ export interface AuthRequest extends Request {
     telegramId: number;
     username?: string;
   };
+  // Для переиспользования уже загруженного пользователя в роутерах (ускорение subscription-status)
+  userRecord?: any;
 }
 
 export const authenticateToken = async (req: AuthRequest, res: Response, next: NextFunction) => {
@@ -118,6 +120,8 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
       telegramId: user.telegramId,
       username: user.username
     };
+    // Сохраняем документ пользователя, чтобы роуты могли избежать повторных запросов к MongoDB
+    req.userRecord = user;
 
     next();
   } catch (error) {
