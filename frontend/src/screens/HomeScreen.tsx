@@ -68,17 +68,31 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
   // Устанавливаем дефолтные значения сразу, чтобы кнопки всегда отображались корректно
   const [subscriptionInfo, setSubscriptionInfo] = useState<any>({
     hasSubscription: false,
-    canUseDailyAdvice: true, // По умолчанию разрешаем, пока не получим ответ от сервера
-    canUseYesNo: true, // По умолчанию разрешаем, пока не получим ответ от сервера
-    canUseThreeCards: true, // По умолчанию разрешаем, пока не получим ответ от сервера
-    remainingDailyAdvice: -1, // -1 означает неограниченно
-    remainingYesNo: -1, // -1 означает неограниченно
-    remainingThreeCards: -1, // -1 означает неограниченно
+    // ВАЖНО: по умолчанию блокируем всё до получения статуса с backend (устраняем race condition)
+    canUseDailyAdvice: false,
+    canUseYesNo: false,
+    canUseThreeCards: false,
+    remainingDailyAdvice: 0,
+    remainingYesNo: 0,
+    remainingThreeCards: 0,
     // cooldowns появится из backend (/tarot/subscription-status) — оставляем опционально
   });
-  const [isLoading, setIsLoading] = useState(true);
+  const [isSubscriptionLoading, setIsSubscriptionLoading] = useState(true);
 
   useEffect(() => {
+    // Пробуем быстро показать прошлый статус (для UX), но клики всё равно блокируем
+    try {
+      const cached = localStorage.getItem('subscriptionStatusCache');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed?.subscriptionInfo) {
+          setSubscriptionInfo(parsed.subscriptionInfo);
+        }
+      }
+    } catch {
+      // ignore cache errors
+    }
+
     fetchSubscriptionStatus();
   }, []);
 
@@ -90,7 +104,7 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
   }, [activeTab, refreshSubscription]);
 
   const fetchSubscriptionStatus = async () => {
-    setIsLoading(true);
+    setIsSubscriptionLoading(true);
     try {
       // Используем endpoint для получения статуса подписки
       const getAuthToken = async () => {
@@ -157,14 +171,14 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
         console.warn('⚠️ No token available, skipping subscription status check');
         setSubscriptionInfo({
           hasSubscription: false,
-          canUseDailyAdvice: true, // Разрешаем по умолчанию
-          canUseYesNo: true, // Разрешаем по умолчанию
-          canUseThreeCards: true, // Разрешаем по умолчанию
-          remainingDailyAdvice: -1, // -1 означает неограниченно
-          remainingYesNo: -1, // -1 означает неограниченно
-          remainingThreeCards: -1, // -1 означает неограниченно
+          canUseDailyAdvice: false,
+          canUseYesNo: false,
+          canUseThreeCards: false,
+          remainingDailyAdvice: 0,
+          remainingYesNo: 0,
+          remainingThreeCards: 0,
         });
-        setIsLoading(false);
+        setIsSubscriptionLoading(false);
         return;
       }
       
@@ -193,14 +207,14 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
         }
         setSubscriptionInfo({
           hasSubscription: false,
-          canUseDailyAdvice: true, // Разрешаем по умолчанию
-          canUseYesNo: true, // Разрешаем по умолчанию
-          canUseThreeCards: true, // Разрешаем по умолчанию
-          remainingDailyAdvice: -1, // -1 означает неограниченно
-          remainingYesNo: -1, // -1 означает неограниченно
-          remainingThreeCards: -1, // -1 означает неограниченно
+          canUseDailyAdvice: false,
+          canUseYesNo: false,
+          canUseThreeCards: false,
+          remainingDailyAdvice: 0,
+          remainingYesNo: 0,
+          remainingThreeCards: 0,
         });
-        setIsLoading(false);
+        setIsSubscriptionLoading(false);
         return;
       }
       
@@ -237,7 +251,7 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
                   remainingYesNo: 0,
                   remainingThreeCards: 0,
                 });
-                setIsLoading(false);
+                setIsSubscriptionLoading(false);
                 return;
               }
               
@@ -286,7 +300,7 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
                     const retryData = await retryResponse.json();
                     if (retryData.subscriptionInfo) {
                       setSubscriptionInfo(retryData.subscriptionInfo);
-                      setIsLoading(false);
+                      setIsSubscriptionLoading(false);
                       return;
                     }
                   } else {
@@ -300,7 +314,7 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
                       remainingYesNo: 0,
                       remainingThreeCards: 0,
                     });
-                    setIsLoading(false);
+                    setIsSubscriptionLoading(false);
                     return;
                   }
                 } else {
@@ -314,7 +328,7 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
                     remainingYesNo: 0,
                     remainingThreeCards: 0,
                   });
-                  setIsLoading(false);
+                  setIsSubscriptionLoading(false);
                   return;
                 }
               } else {
@@ -328,7 +342,7 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
                   remainingYesNo: 0,
                   remainingThreeCards: 0,
                 });
-                setIsLoading(false);
+                setIsSubscriptionLoading(false);
                 return;
               }
             } catch (err) {
@@ -346,7 +360,7 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
           remainingYesNo: 0,
           remainingThreeCards: 0,
         });
-        setIsLoading(false);
+        setIsSubscriptionLoading(false);
         return;
       }
       
@@ -361,7 +375,7 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
           remainingYesNo: 0,
           remainingThreeCards: 0,
         });
-        setIsLoading(false);
+        setIsSubscriptionLoading(false);
         return;
       }
       
@@ -377,6 +391,14 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
       if (data.subscriptionInfo) {
         console.log('✅ Setting subscription info:', data.subscriptionInfo);
         setSubscriptionInfo(data.subscriptionInfo);
+        try {
+          localStorage.setItem('subscriptionStatusCache', JSON.stringify({
+            ts: Date.now(),
+            subscriptionInfo: data.subscriptionInfo
+          }));
+        } catch {
+          // ignore cache errors
+        }
       } else {
         console.warn('⚠️ No subscriptionInfo in response:', data);
         // Если данных нет, блокируем доступ (безопасный режим)
@@ -393,7 +415,7 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
     } catch (error) {
       console.error('Error fetching subscription status:', error);
     } finally {
-      setIsLoading(false);
+      setIsSubscriptionLoading(false);
     }
   };
 
@@ -449,6 +471,8 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
   };
 
   const isTypeDisabled = (type: 'daily' | 'three_cards' | 'yesno') => {
+    // Пока не получили статус с backend — ВСЁ блокируем и игнорируем клики (устраняем race condition)
+    if (isSubscriptionLoading) return true;
     if (subscriptionInfo?.hasSubscription) return false;
     const remaining = getRemainingCount(type);
     const canUse = canUseType(type);
@@ -458,6 +482,7 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
   };
 
   const handleOneCardClick = () => {
+    if (isSubscriptionLoading) return;
     if (isTypeDisabled('daily')) {
       // Если кнопка заблокирована, открываем модальное окно подписки
       handleOpenSubscriptionModal();
@@ -480,6 +505,7 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
   };
 
   const handleYesNoClick = () => {
+    if (isSubscriptionLoading) return;
     if (isTypeDisabled('yesno')) {
       handleOpenSubscriptionModal();
       return;
@@ -492,6 +518,7 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
   };
 
   const handleThreeCardsClick = () => {
+    if (isSubscriptionLoading) return;
     if (isTypeDisabled('three_cards')) {
       handleOpenSubscriptionModal();
       return;
@@ -507,6 +534,7 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
     const remaining = getRemainingCount(type);
     if (subscriptionInfo?.hasSubscription) return '';
     if (remaining === -1) return '';
+    if (isSubscriptionLoading) return 'Проверяем доступ...';
     if (remaining === 0) {
       const hours = getCooldownHoursRemaining(type);
       return hours > 0 ? `Использовано (осталось ${hours} ч)` : 'Использовано';
