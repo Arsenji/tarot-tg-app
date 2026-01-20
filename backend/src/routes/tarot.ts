@@ -41,21 +41,31 @@ router.get('/daily-card', async (req: any, res) => {
     
     // Проверяем подписку и лимит для бесплатных пользователей (1 раз в 24 часа)
     const subscriptionStatus = await checkSubscriptionStatus(userId);
-    const hasUsedToday = await hasUsedDailyAdviceToday(userId);
+    const cooldowns = await getFreeUsageCooldowns(userId);
+    const hasUsedToday = cooldowns.dailyAdviceMsRemaining > 0;
     
     logger.info('Daily advice subscription check', {
       userId,
       hasSubscription: subscriptionStatus.hasSubscription,
       isAdmin,
       hasUsedToday,
+      dailyAdviceMsRemaining: cooldowns.dailyAdviceMsRemaining,
+      dailyAdviceHoursRemaining: cooldowns.dailyAdviceHoursRemaining,
       willAllow: subscriptionStatus.hasSubscription || isAdmin || !hasUsedToday
     });
     
     if (!subscriptionStatus.hasSubscription && !isAdmin && hasUsedToday) {
+      const nextAvailableAt = new Date(Date.now() + cooldowns.dailyAdviceMsRemaining).toISOString();
       return res.status(403).json({
         success: false,
-        error: 'Daily advice already used. Please wait 24 hours or subscribe for unlimited access.',
-        subscriptionRequired: true
+        error: 'Daily advice already used. Please wait until cooldown ends.',
+        reason: 'DAILY_ADVICE_COOLDOWN',
+        subscriptionRequired: false,
+        cooldown: {
+          msRemaining: cooldowns.dailyAdviceMsRemaining,
+          hoursRemaining: cooldowns.dailyAdviceHoursRemaining,
+          nextAvailableAt
+        }
       });
     }
 
@@ -128,21 +138,31 @@ router.post('/daily-advice', async (req: any, res) => {
     
     // Проверяем подписку и лимит для бесплатных пользователей (1 раз в 24 часа)
     const subscriptionStatus = await checkSubscriptionStatus(userId);
-    const hasUsedToday = await hasUsedDailyAdviceToday(userId);
+    const cooldowns = await getFreeUsageCooldowns(userId);
+    const hasUsedToday = cooldowns.dailyAdviceMsRemaining > 0;
     
     logger.info('Daily advice subscription check', {
       userId,
       hasSubscription: subscriptionStatus.hasSubscription,
       isAdmin,
       hasUsedToday,
+      dailyAdviceMsRemaining: cooldowns.dailyAdviceMsRemaining,
+      dailyAdviceHoursRemaining: cooldowns.dailyAdviceHoursRemaining,
       willAllow: subscriptionStatus.hasSubscription || isAdmin || !hasUsedToday
     });
     
     if (!subscriptionStatus.hasSubscription && !isAdmin && hasUsedToday) {
+      const nextAvailableAt = new Date(Date.now() + cooldowns.dailyAdviceMsRemaining).toISOString();
       return res.status(403).json({
         success: false,
-        error: 'Daily advice already used. Please wait 24 hours or subscribe for unlimited access.',
-        subscriptionRequired: true
+        error: 'Daily advice already used. Please wait until cooldown ends.',
+        reason: 'DAILY_ADVICE_COOLDOWN',
+        subscriptionRequired: false,
+        cooldown: {
+          msRemaining: cooldowns.dailyAdviceMsRemaining,
+          hoursRemaining: cooldowns.dailyAdviceHoursRemaining,
+          nextAvailableAt
+        }
       });
     }
 
