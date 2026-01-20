@@ -8,14 +8,17 @@ import { ThreeCardsScreen } from '@/screens/ThreeCardsScreen';
 import { YesNoScreen } from '@/screens/YesNoScreen';
 import { HistoryScreen } from '@/screens/HistoryScreen';
 import { initPerformanceMonitoring } from '@/utils/performance';
-import { getApiEndpoint } from '@/utils/config';
+import { bootstrapSubscriptionStatus, getSubscriptionSnapshot, refreshSubscriptionStatus } from '@/state/subscriptionStore';
+
+// Стартуем запрос статуса подписки максимально рано (до рендера главного экрана).
+// Shared Promise гарантирует отсутствие дублей.
+bootstrapSubscriptionStatus().catch(() => {});
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<'home' | 'history'>('home');
   const [showWelcome, setShowWelcome] = useState(true);
   const [currentScreen, setCurrentScreen] = useState<'main' | 'oneCard' | 'threeCards' | 'yesNo'>('main');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [refreshSubscription, setRefreshSubscription] = useState(0);
 
   useEffect(() => {
     // Инициализируем Telegram WebApp
@@ -57,217 +60,12 @@ export default function Home() {
 
   const checkSubscriptionForHistory = async () => {
     try {
-      // Получаем токен динамически через Telegram WebApp
-      const getAuthToken = async () => {
-        try {
-          // Сначала проверяем, есть ли токен в localStorage
-          let token = localStorage.getItem('authToken');
-          
-          if (!token && typeof window !== 'undefined' && (window as any).Telegram?.WebApp?.initData) {
-            // Если токена нет, получаем его через Telegram WebApp
-            const initData = (window as any).Telegram.WebApp.initData;
-            
-            try {
-              const authResponse = await fetch(getApiEndpoint('/auth/telegram'), {
-                method: 'POST',
-                credentials: 'include',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ initData })
-              });
-              
-              if (authResponse.ok) {
-                const authData = await authResponse.json();
-                // Токен может быть в authData.token или authData.data.token
-                token = authData.data?.token || authData.token;
-                if (token) {
-                  localStorage.setItem('authToken', token);
-                } else {
-                  console.error('Token not found in auth response:', authData);
-                }
-              }
-            } catch (error) {
-              // Тихая обработка ошибки получения токена
-              return null;
-            }
-          }
-          
-          return token;
-        } catch (error) {
-          // Тихая обработка ошибки
-          return null;
-        }
-      };
-
-      let token = await getAuthToken();
-      
-      // Если токена нет, пытаемся получить его через Telegram WebApp
-      if (!token && typeof window !== 'undefined' && (window as any).Telegram?.WebApp?.initData) {
-        const initData = (window as any).Telegram.WebApp.initData;
-        try {
-          const authResponse = await fetch(getApiEndpoint('/auth/telegram'), {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ initData })
-          });
-          
-          if (authResponse.ok) {
-            const authData = await authResponse.json();
-            token = authData.data?.token || authData.token;
-            if (token) {
-              localStorage.setItem('authToken', token);
-            }
-          }
-        } catch (error) {
-          // Тихая обработка ошибки получения токена
-        }
-      }
-      
-      // Если токен все еще не получен, показываем модальное окно о подписке
-      if (!token) {
-        // Не делаем запрос без токена, но показываем модальное окно
-        showSubscriptionModal();
-        return;
-      }
-      
-      // Используем AbortController для возможности отмены запроса
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 секунд таймаут
-      
-      let response: Response | null = null;
-      try {
-        response = await fetch(getApiEndpoint('/tarot/subscription-status'), {
-          method: 'GET',
-          credentials: 'include',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-          signal: controller.signal,
-        });
-        clearTimeout(timeoutId);
-      } catch (error: any) {
-        clearTimeout(timeoutId);
-        // Подавляем ошибки сети - не выводим в консоль
-        if (error.name !== 'AbortError') {
-          // Тихая обработка ошибки
-        }
-        // При ошибке сети показываем модальное окно о подписке
-        showSubscriptionModal();
-        return;
-      }
-      
-      if (!response || !response.ok) {
-        if (response && response.status === 401) {
-          // Тихо обрабатываем 401 - не логируем в консоль, так как это ожидаемо при первом запросе
-          // Пытаемся получить новый токен
-          const initData = (window as any).Telegram?.WebApp?.initData;
-          if (initData) {
-            try {
-              const authController = new AbortController();
-              const authTimeoutId = setTimeout(() => authController.abort(), 10000);
-              
-              let authResponse: Response | null = null;
-              try {
-                authResponse = await fetch(getApiEndpoint('/auth/telegram'), {
-                  method: 'POST',
-                  credentials: 'include',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ initData }),
-                  signal: authController.signal,
-                });
-                clearTimeout(authTimeoutId);
-              } catch (authError: any) {
-                clearTimeout(authTimeoutId);
-                if (authError.name !== 'AbortError') {
-                  // Тихая обработка ошибки
-                }
-                return;
-              }
-              
-              if (authResponse && authResponse.ok) {
-                const authData = await authResponse.json();
-                // Токен может быть в authData.token или authData.data.token
-                const newToken = authData.data?.token || authData.token;
-                if (newToken) {
-                  localStorage.setItem('authToken', newToken);
-                  console.log('✅ Token saved after retry:', newToken.substring(0, 20) + '...');
-                  
-                  // Повторяем запрос с новым токеном
-                  const retryController = new AbortController();
-                  const retryTimeoutId = setTimeout(() => retryController.abort(), 10000);
-                  
-                  let retryResponse: Response | null = null;
-                  try {
-                    retryResponse = await fetch(getApiEndpoint('/tarot/subscription-status'), {
-                      method: 'GET',
-                      credentials: 'include',
-                      headers: {
-                        'Authorization': `Bearer ${newToken}`,
-                      },
-                      signal: retryController.signal,
-                    });
-                    clearTimeout(retryTimeoutId);
-                  } catch (retryError: any) {
-                    clearTimeout(retryTimeoutId);
-                    if (retryError.name !== 'AbortError') {
-                      // Тихая обработка ошибки
-                    }
-                    showSubscriptionModal();
-                    return;
-                  }
-                  
-                  if (retryResponse && retryResponse.ok) {
-                    const retryData = await retryResponse.json();
-                    if (retryData.subscriptionInfo?.hasSubscription) {
-                      setActiveTab('history');
-                      return;
-                    } else {
-                      // После повторной попытки подписки все еще нет - показываем модальное окно
-                      showSubscriptionModal();
-                      return;
-                    }
-                  } else {
-                    // Ошибка при повторной попытке - показываем модальное окно
-                    showSubscriptionModal();
-                    return;
-                  }
-                } else {
-                  console.error('❌ Token not found in auth response after retry:', authData);
-                  // Не удалось получить новый токен - показываем модальное окно
-                  showSubscriptionModal();
-                  return;
-                }
-              } else {
-                // Не удалось получить новый токен - показываем модальное окно
-                showSubscriptionModal();
-                return;
-              }
-            } catch (err) {
-              // Тихая обработка ошибки, но показываем модальное окно
-              showSubscriptionModal();
-              return;
-            }
-          } else {
-            // Нет initData для получения токена - показываем модальное окно
-            showSubscriptionModal();
-            return;
-          }
-        } else {
-          // Другая ошибка (не 401) - показываем модальное окно
-          showSubscriptionModal();
-          return;
-        }
-      }
-      
-      const data = await response.json();
-      
-      if (data.subscriptionInfo?.hasSubscription) {
-        // У пользователя есть подписка, переключаемся на историю
+      // Источник истины: глобальный стор (один запрос + shared promise)
+      await bootstrapSubscriptionStatus();
+      const snap = getSubscriptionSnapshot();
+      if (snap.subscriptionInfo?.hasSubscription) {
         setActiveTab('history');
       } else {
-        // У пользователя нет подписки, показываем модальное окно
         showSubscriptionModal();
       }
     } catch (error) {
@@ -378,19 +176,19 @@ export default function Home() {
         return <OneCardScreen onBack={() => {
           setCurrentScreen('main');
           // Обновляем статус подписки после использования Daily Advice
-          setRefreshSubscription(prev => prev + 1);
+          refreshSubscriptionStatus();
         }} />;
       case 'threeCards':
         return <ThreeCardsScreen onBack={() => {
           setCurrentScreen('main');
           // Обновляем статус подписки после возврата с экрана Three Cards
-          setRefreshSubscription(prev => prev + 1);
+          refreshSubscriptionStatus();
         }} />;
       case 'yesNo':
         return <YesNoScreen onBack={() => {
           setCurrentScreen('main');
           // Обновляем статус подписки после возврата с экрана Yes/No
-          setRefreshSubscription(prev => prev + 1);
+          refreshSubscriptionStatus();
         }} />;
       case 'main':
       default:
@@ -403,7 +201,6 @@ export default function Home() {
                 onOneCard={() => setCurrentScreen('oneCard')}
                 onYesNo={() => setCurrentScreen('yesNo')}
                 onThreeCards={() => setCurrentScreen('threeCards')}
-                refreshSubscription={refreshSubscription}
               />
             );
           case 'history':
@@ -422,7 +219,6 @@ export default function Home() {
                 onOneCard={() => setCurrentScreen('oneCard')}
                 onYesNo={() => setCurrentScreen('yesNo')}
                 onThreeCards={() => setCurrentScreen('threeCards')}
-                refreshSubscription={refreshSubscription}
               />
             );
         }

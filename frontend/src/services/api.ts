@@ -233,6 +233,13 @@ class ApiService {
     return response;
   }
 
+  // Быстрый статус доступности раскладов (используется для блокировки UI)
+  async getTarotSubscriptionStatus(): Promise<ApiResponse<{ subscriptionInfo: any }>> {
+    return this.request<{ subscriptionInfo: any }>('/api/tarot/subscription-status', {
+      method: 'GET',
+    });
+  }
+
   async getSubscriptionStatus(userId: string): Promise<ApiResponse<{ subscriptionInfo: any }>> {
     return this.request<{ subscriptionInfo: any }>(`/api/subscription/${userId}/status`);
   }
