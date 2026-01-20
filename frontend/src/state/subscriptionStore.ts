@@ -8,6 +8,7 @@
  */
 import { apiService } from '@/services/api';
 import { useEffect, useState } from 'react';
+import { getValidAuthToken } from '@/utils/auth';
 
 export type SubscriptionInfo = any;
 
@@ -91,19 +92,32 @@ export function bootstrapSubscriptionStatus(): Promise<void> {
 
   setState({ loading: true });
   inFlight = (async () => {
+    // Гарантируем: запрос стартует сразу после появления токена, а не после действий пользователя.
+    const token = await getValidAuthToken();
+    if (!token) {
+      // Токена ещё нет (Telegram initData мог быть не готов) — остаёмся в locked состоянии.
+      console.log('📊 Subscription status bootstrap: waiting for token (locked)');
+      setState({ loading: false, loaded: false, error: 'NO_TOKEN_YET' });
+      return;
+    }
+
+    console.log('📊 Subscription status bootstrap: requesting /api/tarot/subscription-status');
     const resp = await apiService.getTarotSubscriptionStatus();
 
     const info = (resp as any).subscriptionInfo ?? (resp.data as any)?.subscriptionInfo;
     if (resp.success && info) {
+      console.log('📊 Subscription status response:', info);
       safeSetCachedInfo(info);
       setState({ subscriptionInfo: info, loaded: true, loading: false, error: undefined });
       return;
     }
 
-    // Safe-mode: блокируем доступ, но отмечаем loaded=true чтобы UI не висел бесконечно
+    // Если ответ неуспешный — остаёмся в locked режиме.
+    // ВАЖНО: не привязываем повторную попытку к кликам пользователя.
+    console.log('📊 Subscription status bootstrap: failed', { error: resp.error });
     setState({
       subscriptionInfo: LOCKED_DEFAULT,
-      loaded: true,
+      loaded: false,
       loading: false,
       error: resp.error || 'Failed to load subscription status',
     });

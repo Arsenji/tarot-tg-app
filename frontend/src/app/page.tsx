@@ -31,6 +31,11 @@ export default function Home() {
                     WebApp.ready();
                     WebApp.expand();
                   }
+
+                  // ВАЖНО: повторно триггерим bootstrap сразу после ready(),
+                  // чтобы запрос статуса подписки стартовал как только Telegram initData/токен доступны.
+                  // Shared Promise гарантирует отсутствие дублей.
+                  bootstrapSubscriptionStatus().catch(() => {});
                 }).catch(() => {
           // Игнорируем ошибки если SDK недоступен
           console.log('Telegram WebApp SDK not available');
