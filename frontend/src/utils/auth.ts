@@ -34,15 +34,33 @@ export const getAuthToken = async (): Promise<string | null> => {
       
       if (authResponse.ok) {
         const authData = await authResponse.json();
-        token = authData.token;
+        console.log('📥 Auth response received:', {
+          hasData: !!authData.data,
+          hasToken: !!authData.token,
+          hasDataToken: !!authData.data?.token,
+          fullResponse: authData
+        });
         
-        // Сохраняем токен в localStorage
-        localStorage.setItem('authToken', token);
-        if (authData.expires) {
-          localStorage.setItem('tokenExpires', authData.expires.toString());
+        // Токен может быть в authData.token или authData.data.token
+        token = authData.data?.token || authData.token;
+        
+        if (token) {
+          // Сохраняем токен в localStorage
+          localStorage.setItem('authToken', token);
+          console.log('✅ Token saved to localStorage:', token.substring(0, 20) + '...');
+          const expires = authData.data?.expires || authData.expires;
+          if (expires) {
+            // expires может быть в секундах — нормализуем до миллисекунд для isTokenValid()
+            const raw = typeof expires === 'string' ? parseInt(expires) : expires;
+            const expiresMs = raw < 1_000_000_000_000 ? raw * 1000 : raw;
+            localStorage.setItem('tokenExpires', expiresMs.toString());
+          }
+        } else {
+          console.error('❌ Token not found in auth response:', authData);
         }
       } else {
-        console.error('Auth response failed:', authResponse.status, authResponse.statusText);
+        const errorText = await authResponse.text();
+        console.error('❌ Auth response failed:', authResponse.status, authResponse.statusText, errorText);
       }
     }
     
@@ -63,8 +81,14 @@ export const isTokenValid = (): boolean => {
     
     if (!token || !expires) return false;
     
-    const now = Date.now();
-    return now < parseInt(expires);
+    const nowMs = Date.now();
+    const raw = parseInt(expires);
+    if (!raw || Number.isNaN(raw)) return false;
+
+    // Backend отдаёт expires в секундах (AuthController.telegramAuth),
+    // а Date.now() — в миллисекундах. Поддерживаем оба формата.
+    const expiresMs = raw < 1_000_000_000_000 ? raw * 1000 : raw;
+    return nowMs < expiresMs;
   } catch (error) {
     console.error('Error checking token validity:', error);
     return false;
@@ -83,9 +107,19 @@ export const clearAuthTokens = (): void => {
  * Получение токена с автоматическим обновлением
  */
 export const getValidAuthToken = async (): Promise<string | null> => {
+  // Проверяем валидность токена
   if (!isTokenValid()) {
     clearAuthTokens();
+    // Если токен невалиден, пытаемся получить новый
+    return await getAuthToken();
   }
   
+  // Токен валиден, возвращаем его
+  const token = localStorage.getItem('authToken');
+  if (token) {
+    return token;
+  }
+  
+  // Если токена нет, пытаемся получить новый
   return await getAuthToken();
 };

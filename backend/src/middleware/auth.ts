@@ -14,7 +14,21 @@ export interface AuthRequest extends Request {
 export const authenticateToken = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const authHeader = req.headers.authorization;
-    const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+    // Поддерживаем "Bearer <token>" и (на всякий случай) "Bearer<token>"
+    const token = authHeader
+      ? (authHeader.startsWith('Bearer ') ? authHeader.slice('Bearer '.length).trim() : authHeader.startsWith('Bearer') ? authHeader.slice('Bearer'.length).trim() : undefined)
+      : undefined;
+
+    // Временная диагностика (без утечки полного токена)
+    if (process.env.AUTH_DEBUG === 'true') {
+      logger.info('Auth debug headers', {
+        path: req.path,
+        method: req.method,
+        hasAuthorizationHeader: !!authHeader,
+        authorizationPrefix: authHeader ? authHeader.substring(0, 20) : null,
+        headerKeys: Object.keys(req.headers || {}),
+      });
+    }
 
     if (!token) {
       logger.warn('Authentication failed: No token provided', {
