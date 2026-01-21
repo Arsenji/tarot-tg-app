@@ -1,7 +1,7 @@
 'use client';
 
 import { motion, AnimatePresence } from 'motion/react';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/ui/Button';
 import { X, Crown, Star, Calendar, Sparkles } from 'lucide-react';
 
 interface SubscriptionModalProps {

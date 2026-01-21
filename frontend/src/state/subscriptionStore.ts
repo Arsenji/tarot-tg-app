@@ -12,6 +12,13 @@ import { getValidAuthToken } from '@/utils/auth';
 
 export type SubscriptionInfo = any;
 
+export type TarotType = 'daily' | 'yesNo' | 'threeCards';
+
+export type TarotAvailability = {
+  allowed: boolean;
+  nextAvailableAt?: Date;
+};
+
 export type SubscriptionState = {
   loaded: boolean;
   loading: boolean;
@@ -65,6 +72,55 @@ function safeSetCachedInfo(info: SubscriptionInfo) {
 
 export function getSubscriptionSnapshot(): SubscriptionState {
   return state;
+}
+
+function getCanUse(info: any, type: TarotType): boolean {
+  switch (type) {
+    case 'daily':
+      return !!info?.canUseDailyAdvice;
+    case 'yesNo':
+      return !!info?.canUseYesNo;
+    case 'threeCards':
+      return !!info?.canUseThreeCards;
+    default:
+      return false;
+  }
+}
+
+function getCooldownMsRemaining(info: any, type: TarotType): number | null {
+  const cooldowns = info?.cooldowns;
+  if (!cooldowns) return null;
+  switch (type) {
+    case 'daily':
+      return typeof cooldowns.dailyAdviceMsRemaining === 'number' ? cooldowns.dailyAdviceMsRemaining : null;
+    case 'yesNo':
+      return typeof cooldowns.yesNoMsRemaining === 'number' ? cooldowns.yesNoMsRemaining : null;
+    case 'threeCards':
+      return typeof cooldowns.threeCardsMsRemaining === 'number' ? cooldowns.threeCardsMsRemaining : null;
+    default:
+      return null;
+  }
+}
+
+/**
+ * Единый источник истины по доступности раскладов.
+ * Никаких вычислений доступности в компонентах — только этот helper.
+ */
+export function getTarotAvailability(type: TarotType): TarotAvailability {
+  const snap = getSubscriptionSnapshot();
+
+  // Pessimistic lock: пока статус не загружен — ВСЁ заблокировано.
+  if (!snap.loaded || snap.loading) return { allowed: false };
+
+  const info = snap.subscriptionInfo;
+  if (info?.hasSubscription) return { allowed: true };
+
+  const allowed = getCanUse(info, type);
+  if (allowed) return { allowed: true };
+
+  const msRemaining = getCooldownMsRemaining(info, type);
+  const nextAvailableAt = msRemaining && msRemaining > 0 ? new Date(Date.now() + msRemaining) : undefined;
+  return { allowed: false, nextAvailableAt };
 }
 
 export function subscribeSubscription(listener: () => void): () => void {

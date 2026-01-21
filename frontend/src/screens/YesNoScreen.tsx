@@ -1,7 +1,7 @@
 'use client';
 
 import { motion, AnimatePresence } from 'motion/react';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/ui/Button';
 import { FloatingCard } from '@/components/FloatingCard';
 import { ArrowLeft, Send, X, AlertCircle } from 'lucide-react';
 import { useState, useEffect } from 'react';
@@ -182,8 +182,8 @@ export function YesNoScreen({ onBack, onSubscriptionRequired }: YesNoScreenProps
             meaning: randomCard.meaning,
             advice: randomCard.advice,
             isMajorArcana: randomCard.isMajorArcana,
-            suit: randomCard.suit,
-            number: randomCard.number,
+            suit: randomCard.suit ?? '',
+            number: randomCard.number ?? 0,
           },
           answer: randomAnswer === 'yes' ? 'ДА' : 'НЕТ',
           interpretation: `На основе карты "${randomCard.name}" ответ: ${randomAnswer === 'yes' ? 'Да' : 'Нет'}. ${randomCard.advice}`,
@@ -204,8 +204,8 @@ export function YesNoScreen({ onBack, onSubscriptionRequired }: YesNoScreenProps
           meaning: randomCard.meaning,
           advice: randomCard.advice,
           isMajorArcana: randomCard.isMajorArcana,
-          suit: randomCard.suit,
-          number: randomCard.number,
+          suit: randomCard.suit ?? '',
+          number: randomCard.number ?? 0,
         },
         answer: randomAnswer === 'yes' ? 'ДА' : 'НЕТ',
         interpretation: `На основе карты "${randomCard.name}" ответ: ${randomAnswer === 'yes' ? 'Да' : 'Нет'}. ${randomCard.advice}`,
@@ -256,15 +256,11 @@ export function YesNoScreen({ onBack, onSubscriptionRequired }: YesNoScreenProps
       let yesNoAnswer: 'Да' | 'Нет' | null = null;
       
       if (response.success && response.data) {
-        // Ответ может быть в response.data.answer или response.data.data.answer
+        // Ожидаемая структура: response.data.answer / response.data.card / response.data.yesNoAnswer
         if (response.data.answer) {
           answer = response.data.answer;
           clarifyingCard = response.data.card || result.card;
           yesNoAnswer = response.data.yesNoAnswer || null;
-        } else if (response.data.data && response.data.data.answer) {
-          answer = response.data.data.answer;
-          clarifyingCard = response.data.data.card || result.card;
-          yesNoAnswer = response.data.data.yesNoAnswer || null;
         } else {
           console.error('Answer not found in response data:', response.data);
         }

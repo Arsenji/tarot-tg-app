@@ -1,13 +1,14 @@
 'use client';
 
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import BottomNavigation from '@/components/BottomNavigation';
 import { ArrowLeft, Calendar, Clock, Star, Sparkles, X } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/ui/Button';
 import { useState, useEffect } from 'react';
 import { apiService } from '@/services/api';
 import { formatInterpretationText, truncateText } from '@/utils/textFormatting';
 import { SubscriptionModal } from '@/components/SubscriptionModal';
+import { tarotCards } from '@/data/tarotCards';
 
 interface HistoryCard {
   name: string;
@@ -99,19 +100,27 @@ export function HistoryScreen({ onBack, activeTab, onTabChange }: HistoryScreenP
     try {
       setLoading(true);
       setError(null);
+      console.log('📚 Loading history...');
       const response = await apiService.getHistory();
+      console.log('📚 History response:', response);
+      console.log('📚 Response success:', response.success);
+      console.log('📚 Response data:', response.data);
+      console.log('📚 Response data.readings:', response.data?.readings);
       
       if (response.success && response.data) {
-        setHistory(response.data.readings || []);
+        const readings = response.data.readings || [];
+        console.log('📚 Setting history with readings:', readings.length);
+        setHistory(readings as any);
       } else if (response.subscriptionRequired) {
         // Показываем модальное окно подписки для истории
         setShowSubscriptionModal(true);
         setError('История доступна только по подписке');
       } else {
-        setError('Не удалось загрузить историю');
+        console.error('📚 History load failed:', response.error);
+        setError(response.error || 'Не удалось загрузить историю');
       }
     } catch (err) {
-      console.error('Error loading history:', err);
+      console.error('📚 Error loading history:', err);
       setError('Ошибка при загрузке истории');
     } finally {
       setLoading(false);
@@ -137,34 +146,42 @@ export function HistoryScreen({ onBack, activeTab, onTabChange }: HistoryScreenP
         return;
       }
       
-      // Получаем подробное описание карты для категории
-      const response = await apiService.getCardDetailedDescription(card.name, category);
+      // Ищем карту в локальных данных
+      const localCard = tarotCards.find(c => {
+        const cardName = card.name?.toLowerCase().trim();
+        const localName = c.name?.toLowerCase().trim();
+        return cardName === localName;
+      });
       
-      console.log('API response:', response);
-      console.log('Response success:', response.success);
-      console.log('Response data:', response.data);
-      console.log('Response data type:', typeof response.data);
-      console.log('Response data.description:', response.data?.description);
+      // Формируем описание из локальных данных или используем данные карты
+      let detailedDescription = '';
       
-      // Проверяем разные возможные структуры ответа
-      const description = response.data?.description || (response.data as any)?.data?.description;
-      
-      if (response.success && description) {
-        console.log('Setting modal state...');
-        setSelectedCardDetails({
-          card,
-          category,
-          detailedDescription: description
-        });
-        setShowCardDetails(true);
-        console.log('Modal should be shown now');
-        console.log('showCardDetails state:', true);
-        console.log('selectedCardDetails state:', { card, category, detailedDescription: description });
+      if (localCard) {
+        // Используем данные из локального источника
+        detailedDescription = `${localCard.meaning}\n\n${localCard.advice}`;
       } else {
-        console.error('API response failed:', response);
-        // Не показываем модальное окно при ошибке API
-        return;
+        // Используем данные из карты истории
+        detailedDescription = card.meaning || card.advice || 'Подробное описание карты';
       }
+      
+      // Дополняем карту данными из локального источника, если они отсутствуют
+      const enrichedCard: HistoryCard = {
+        ...card,
+        meaning: card.meaning || localCard?.meaning || 'Значение карты',
+        advice: card.advice || localCard?.advice || 'Совет карты',
+        keywords: card.keywords || localCard?.keywords || 'Ключевые слова'
+      };
+      
+      console.log('Setting modal state...');
+      setSelectedCardDetails({
+        card: enrichedCard,
+        category,
+        detailedDescription: detailedDescription
+      });
+      setShowCardDetails(true);
+      console.log('Modal should be shown now');
+      console.log('showCardDetails state:', true);
+      console.log('selectedCardDetails state:', { card: enrichedCard, category, detailedDescription });
     } catch (error) {
       console.error('Error getting card details:', error);
       // Не показываем модальное окно при ошибке
@@ -253,7 +270,7 @@ export function HistoryScreen({ onBack, activeTab, onTabChange }: HistoryScreenP
         <div 
           className="absolute inset-0 opacity-20"
           style={{
-            backgroundImage: `url(https://images.unsplash.com/photo-1623489956130-64c5f8e84590?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxzdGFycyUyMG5pZ2h0JTIwc2t5JTIwbWFnaWNhbHxlbnwxfHx8fDE3NTc2NjA3NzR8MA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral)`,
+            // Убрана ссылка на unsplash для избежания таймаутов
             backgroundSize: 'cover',
             backgroundPosition: 'center',
           }}
@@ -482,6 +499,7 @@ export function HistoryScreen({ onBack, activeTab, onTabChange }: HistoryScreenP
   }
 
   return (
+    <>
     <div className="relative h-screen bg-gradient-to-b from-slate-900 via-purple-900 to-slate-900 overflow-hidden">
       {/* Background with stars */}
       <div 
@@ -677,7 +695,22 @@ export function HistoryScreen({ onBack, activeTab, onTabChange }: HistoryScreenP
         <BottomNavigation activeTab={activeTab} onTabChange={onTabChange} />
       </div>
 
-      {/* Modal для подробного описания карты */}
+      {/* Subscription Modal for History */}
+      <SubscriptionModal
+        isOpen={showSubscriptionModal}
+        onClose={() => {
+          setShowSubscriptionModal(false);
+          // Возвращаемся на главную страницу при закрытии
+          onTabChange('home');
+        }}
+        title="Требуется подписка"
+        message="Подписка — это ваш доступ к полному функционалу. Оформите её прямо сейчас и продолжайте работу без ограничений."
+        showHistoryMessage={false}
+      />
+    </div>
+
+    {/* Modal для подробного описания карты - рендерится вне основного контейнера с overflow-hidden */}
+    <AnimatePresence mode="wait">
       {showCardDetails && selectedCardDetails && (
         <motion.div
           className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-4"
@@ -687,14 +720,14 @@ export function HistoryScreen({ onBack, activeTab, onTabChange }: HistoryScreenP
           exit={{ opacity: 0 }}
         >
           <motion.div
-            className="bg-slate-800/90 backdrop-blur-sm rounded-2xl p-6 max-w-md w-full border border-slate-600/30 shadow-2xl"
+            className="bg-slate-800/90 backdrop-blur-sm rounded-2xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto border border-slate-600/30 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.9, opacity: 0 }}
+            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.9, opacity: 0, y: 20 }}
           >
             {/* Header */}
-            <div className="flex items-center space-x-3 mb-4">
+            <div className="flex items-center justify-between mb-4">
               <div className="flex items-center space-x-3">
                 <div className="w-12 h-18 rounded-lg overflow-hidden bg-gradient-to-b from-amber-50 to-amber-100 shadow-md border-2 border-amber-400/30">
                   <img
@@ -707,10 +740,17 @@ export function HistoryScreen({ onBack, activeTab, onTabChange }: HistoryScreenP
                   <h3 className="text-white text-lg font-semibold">{selectedCardDetails.card.name}</h3>
                   <p className="text-gray-300 text-sm">
                     {selectedCardDetails.category === 'love' ? 'Любовь' : 
-                     selectedCardDetails.category === 'work' ? 'Карьера' : 'Личное развитие'}
+                     selectedCardDetails.category === 'work' ? 'Карьера' : 
+                     selectedCardDetails.category === 'career' ? 'Карьера' : 'Личное развитие'}
                   </p>
                 </div>
               </div>
+              <button
+                onClick={closeCardDetails}
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                ✕
+              </button>
             </div>
 
             {/* Content */}
@@ -740,20 +780,8 @@ export function HistoryScreen({ onBack, activeTab, onTabChange }: HistoryScreenP
           </motion.div>
         </motion.div>
       )}
-
-      {/* Subscription Modal for History */}
-      <SubscriptionModal
-        isOpen={showSubscriptionModal}
-        onClose={() => {
-          setShowSubscriptionModal(false);
-          // Возвращаемся на главную страницу при закрытии
-          onTabChange('home');
-        }}
-        title="Требуется подписка"
-        message="Подписка — это ваш доступ к полному функционалу. Оформите её прямо сейчас и продолжайте работу без ограничений."
-        showHistoryMessage={false}
-      />
-    </div>
+    </AnimatePresence>
+    </>
   );
 }
 

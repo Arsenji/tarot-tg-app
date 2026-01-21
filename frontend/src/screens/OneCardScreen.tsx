@@ -1,7 +1,7 @@
 'use client';
 
 import { motion, AnimatePresence } from 'motion/react';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/ui/Button';
 import { ArrowLeft, Sparkles, RefreshCw } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { ImageWithFallback } from '@/components/figma/ImageWithFallback';
@@ -268,9 +268,22 @@ export function OneCardScreen({ onBack }: OneCardScreenProps) {
           : (apiCard.uprightImage || apiCard.image || '/images/placeholder.png');
         
         const localCard = {
-          ...apiCard,
+          name: apiCard.name,
           image: cardImage,
-          imagePath: cardImage
+          imagePath: cardImage,
+          keywords: '',
+          meaning: isReversed ? apiCard.reversedInterpretation : apiCard.uprightInterpretation,
+          advice: response.data.advice || response.data.interpretation || '',
+          isMajorArcana: apiCard.category === 'major',
+          suit: apiCard.category,
+          number: 0,
+          // keep API fields for other consumers
+          category: apiCard.category,
+          isReversed,
+          uprightImage: apiCard.uprightImage,
+          reversedImage: apiCard.reversedImage,
+          uprightInterpretation: apiCard.uprightInterpretation,
+          reversedInterpretation: apiCard.reversedInterpretation,
         };
         setSelectedCard(localCard);
         setAiAdvice(response.data.advice || response.data.interpretation || '');

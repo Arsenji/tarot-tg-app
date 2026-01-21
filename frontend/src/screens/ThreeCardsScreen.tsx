@@ -1,8 +1,7 @@
-import { motion } from 'motion/react';
-import { Button } from '@/components/ui/button';
+import { motion, AnimatePresence } from 'motion/react';
+import { Button } from '@/components/ui/Button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { FloatingCard } from '@/components/FloatingCard';
-import { ArrowLeft, Heart, Briefcase, Star, Sparkles } from 'lucide-react';
+import { ArrowLeft, Heart, Briefcase, Star, Sparkles, AlertCircle } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import { ImageWithFallback } from '@/components/figma/ImageWithFallback';
 import { apiService } from '@/services/api';
@@ -143,8 +142,39 @@ export function ThreeCardsScreen({ onBack }: ThreeCardsScreenProps) {
   }>>([]);
   const [showClarifyingInput, setShowClarifyingInput] = useState(false);
   const [currentClarifyingQuestion, setCurrentClarifyingQuestion] = useState('');
+  const [showValidationError, setShowValidationError] = useState(false);
 
   const selectedCategoryData = categories.find(cat => cat.id === selectedCategory);
+
+  // Валидация вопроса
+  const validateQuestion = (text: string): boolean => {
+    const trimmedText = text.trim();
+    
+    // Проверяем базовые условия
+    if (trimmedText.length === 0 || !trimmedText.endsWith('?')) {
+      return false;
+    }
+    
+    // Проверяем на осмысленность - должны быть русские или английские слова
+    const hasValidWords = /[а-яёА-ЯЁa-zA-Z]{2,}/.test(trimmedText);
+    if (!hasValidWords) {
+      return false;
+    }
+    
+    // Проверяем, что это не только знаки препинания и пробелы
+    const meaningfulChars = trimmedText.replace(/[^\wа-яёА-ЯЁ]/g, '').length;
+    if (meaningfulChars < 3) {
+      return false;
+    }
+    
+    // Проверяем, что есть хотя бы одно слово длиннее 2 символов
+    const words = trimmedText.split(/\s+/).filter(word => word.length > 2);
+    if (words.length === 0) {
+      return false;
+    }
+    
+    return true;
+  };
 
   // Статический массив звезд для предотвращения мигания
   const sparklesData = useMemo(() => {
@@ -243,18 +273,38 @@ export function ThreeCardsScreen({ onBack }: ThreeCardsScreenProps) {
   const startReading = async () => {
     if (!selectedCategory || !userQuestion.trim()) return;
 
+    // Валидация вопроса
+    if (!validateQuestion(userQuestion)) {
+      setShowValidationError(true);
+      return;
+    }
+
     setIsReading(true);
     setIsLoading(true);
     setIsShuffling(true);
     setShowCards(false);
     setRevealedCards([]);
     setError('');
+    setShowValidationError(false);
     
     try {
       const response = await apiService.getThreeCardsReading(selectedCategory, userQuestion);
       
       if (response.success && response.data) {
-        setApiCards(response.data.cards);
+        // Преобразуем карты из API в формат, который ожидает компонент
+        const apiCards = response.data.cards || [];
+        const transformedCards = apiCards.map((card: any) => ({
+          ...card,
+          // Используем правильное изображение в зависимости от перевернутости
+          image: card.isReversed 
+            ? (card.reversedImage || card.image || card.imagePath)
+            : (card.uprightImage || card.image || card.imagePath),
+          imagePath: card.isReversed 
+            ? (card.reversedImage || card.image || card.imagePath)
+            : (card.uprightImage || card.image || card.imagePath)
+        }));
+        
+        setApiCards(transformedCards);
         setApiInterpretation(response.data.interpretation);
         setCurrentReadingId(response.data.readingId);
         
@@ -268,11 +318,11 @@ export function ThreeCardsScreen({ onBack }: ThreeCardsScreenProps) {
         setTimeout(() => setRevealedCards([0]), 500);
         setTimeout(() => setRevealedCards([0, 1]), 1000);
         setTimeout(() => setRevealedCards([0, 1, 2]), 1500);
-          } else {
-                setError(response.error || 'Ошибка при получении расклада');
-                setIsShuffling(false);
-          setIsReading(false);
-                setIsLoading(false);
+      } else {
+        setError(response.error || 'Ошибка при получении расклада');
+        setIsShuffling(false);
+        setIsReading(false);
+        setIsLoading(false);
       }
     } catch (error) {
       setError('Ошибка при обращении к серверу');
@@ -294,7 +344,7 @@ export function ThreeCardsScreen({ onBack }: ThreeCardsScreenProps) {
       <div 
         className="absolute inset-0 opacity-20"
             style={{
-          backgroundImage: `url(https://images.unsplash.com/photo-1623489956130-64c5f8e84590?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxzdGFycyUyMG5pZ2h0JTIwc2t5JTIwbWFnaWNhbHxlbnwxfHx8fDE3NTc2NjA3NzR8MA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral)`,
+          // Убрана ссылка на unsplash для избежания таймаутов
           backgroundSize: 'cover',
           backgroundPosition: 'center',
         }}
@@ -323,37 +373,7 @@ export function ThreeCardsScreen({ onBack }: ThreeCardsScreenProps) {
         ))}
       </div>
 
-      {/* Background floating cards */}
-      <FloatingCard
-        src={backgroundCards[0].src}
-        alt={backgroundCards[0].alt}
-        delay={0.5}
-        duration={6}
-        x={5}
-        y={10}
-        rotation={-25}
-        scale={0.25}
-      />
-      <FloatingCard
-        src={backgroundCards[1].src}
-        alt={backgroundCards[1].alt}
-        delay={2}
-        duration={5}
-        x={90}
-        y={15}
-        rotation={30}
-        scale={0.2}
-      />
-      <FloatingCard
-        src={backgroundCards[2].src}
-        alt={backgroundCards[2].alt}
-        delay={4}
-        duration={7}
-        x={15}
-        y={80}
-        rotation={-15}
-        scale={0.18}
-      />
+      {/* Background floating cards - убраны для избежания проблем с импортом */}
 
       {/* Main Content */}
       <div className="relative z-10 flex flex-col h-screen">
@@ -541,7 +561,11 @@ export function ThreeCardsScreen({ onBack }: ThreeCardsScreenProps) {
                         transition={{ duration: 1, delay: index * 0.3 }}
                       >
                         <ImageWithFallback
-                          src={card.image || card.imagePath || '/images/placeholder.png'}
+                          src={
+                            card.isReversed 
+                              ? (card.reversedImage || card.image || card.imagePath || '/images/placeholder.png')
+                              : (card.uprightImage || card.image || card.imagePath || '/images/placeholder.png')
+                          }
                           alt={card.name}
                           className="w-full h-full object-cover"
                         />
@@ -727,9 +751,10 @@ export function ThreeCardsScreen({ onBack }: ThreeCardsScreenProps) {
                                 </p>
                                 {!isInterpretationExpanded[`clarifying-${index}`] && (
                                   <div className="mt-2 text-xs text-gray-400">
-                          </div>
+                                    Нажмите для полного текста
+                                  </div>
                                 )}
-                          </div>
+                              </div>
                             </motion.div>
                         </div>
                         ) : null}
@@ -791,112 +816,152 @@ export function ThreeCardsScreen({ onBack }: ThreeCardsScreenProps) {
             transition={{ duration: 0.6, delay: 2.5 }}
           >
             <Button
-                    onClick={() => {
+              onClick={() => {
                 setShowCards(false);
                 setSelectedCategory('');
                 setUserQuestion('');
-                      setRevealedCards([]);
+                setRevealedCards([]);
                 setApiCards([]);
                 setApiInterpretation('');
                 setError('');
                 setExpandedCard(null);
-                      setShowClarifyingQuestion(false);
-                      setClarifyingQuestion('');
+                setShowClarifyingQuestion(false);
+                setClarifyingQuestion('');
                 setIsShuffling(false);
                 setShowDescriptionModal(false);
                 setSelectedCardForDescription(null);
                 setIsInterpretationExpanded({});
                 setCurrentReadingId(null);
-                      setClarifyingQuestions([]);
-                    }}
+                setClarifyingQuestions([]);
+              }}
               className="w-full h-12 bg-gradient-to-r from-purple-600/20 to-purple-500/20 hover:from-purple-600/30 hover:to-purple-500/30 text-white border-2 border-purple-400/30 rounded-2xl shadow-xl transition-all duration-300"
-                  >
+            >
               Новый расклад
             </Button>
-                </motion.div>
-            )}
+          </motion.div>
+        )}
 
         {/* Модальное окно для подробного описания */}
-        {showDescriptionModal && selectedCardForDescription && (
+        <AnimatePresence>
+          {showDescriptionModal && selectedCardForDescription && (
+            <motion.div
+              className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={closeDescriptionModal}
+            >
+              <motion.div
+                className="bg-slate-800 rounded-2xl p-6 max-w-md w-full max-h-[80vh] overflow-y-auto border border-slate-600/30"
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-white text-lg font-semibold">
+                    {selectedCardForDescription.name}
+                  </h3>
+                  <button
+                    onClick={closeDescriptionModal}
+                    className="text-gray-400 hover:text-white transition-colors"
+                  >
+                    ✕
+                  </button>
+                </div>
+                
+                <div className="space-y-4">
+                  <div className="text-center">
+                    <motion.div
+                      className="w-32 h-48 mx-auto rounded-xl overflow-hidden shadow-2xl border-2 border-amber-400/30 bg-gradient-to-b from-amber-50 to-amber-100"
+                      initial={{ rotateY: 180, scale: 0.8 }}
+                      animate={{ rotateY: 0, scale: 1 }}
+                      transition={{ duration: 1, delay: 0.3 }}
+                    >
+                      <ImageWithFallback
+                        src={selectedCardForDescription.image || selectedCardForDescription.imagePath || '/images/placeholder.png'}
+                        alt={selectedCardForDescription.name}
+                        className="w-full h-full object-cover"
+                      />
+                    </motion.div>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    <div>
+                      <h4 className="text-amber-400 text-sm font-medium mb-2">Значение:</h4>
+                      <p className="text-gray-300 text-sm leading-relaxed">
+                        {selectedCardForDescription.meaning}
+                      </p>
+                    </div>
+                    
+                    <div>
+                      <h4 className="text-amber-400 text-sm font-medium mb-2">Совет:</h4>
+                      <p className="text-gray-300 text-sm leading-relaxed">
+                        {selectedCardForDescription.advice}
+                      </p>
+                    </div>
+                    
+                    <div>
+                      <h4 className="text-amber-400 text-sm font-medium mb-2">Ключевые слова:</h4>
+                      <p className="text-gray-300 text-sm leading-relaxed">
+                        {selectedCardForDescription.keywords}
+                      </p>
+                    </div>
+                    
+                    {selectedCardForDescription.detailedDescription?.displayDescription && (
+                      <div>
+                        <h4 className="text-amber-400 text-sm font-medium mb-2">Подробное описание:</h4>
+                        <p className="text-gray-300 text-sm leading-relaxed">
+                          {selectedCardForDescription.detailedDescription.displayDescription}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+      {/* Модальное окно ошибки валидации */}
+      <AnimatePresence>
+        {showValidationError && (
           <motion.div
-            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={closeDescriptionModal}
+            onClick={() => setShowValidationError(false)}
           >
             <motion.div
-              className="bg-slate-800 rounded-2xl p-6 max-w-md w-full max-h-[80vh] overflow-y-auto border border-slate-600/30"
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-slate-800/90 backdrop-blur-sm rounded-2xl p-6 max-w-sm w-full border border-slate-600/30 shadow-2xl"
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-white text-lg font-semibold">
-                  {selectedCardForDescription.name}
-                </h3>
-                <button
-                  onClick={closeDescriptionModal}
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  ✕
-                </button>
+              <div className="flex items-center space-x-3 mb-4">
+                <AlertCircle className="w-6 h-6 text-amber-400" />
+                <h3 className="text-lg text-white font-medium">Неверный формат вопроса</h3>
               </div>
-              
-              <div className="space-y-4">
-                <div className="text-center">
-                  <motion.div
-                    className="w-32 h-48 mx-auto rounded-xl overflow-hidden shadow-2xl border-2 border-amber-400/30 bg-gradient-to-b from-amber-50 to-amber-100"
-                    initial={{ rotateY: 180, scale: 0.8 }}
-                    animate={{ rotateY: 0, scale: 1 }}
-                    transition={{ duration: 1, delay: 0.3 }}
-                  >
-                    <ImageWithFallback
-                      src={selectedCardForDescription.image || selectedCardForDescription.imagePath || '/images/placeholder.png'}
-                      alt={selectedCardForDescription.name}
-                      className="w-full h-full object-cover"
-                    />
-                  </motion.div>
-                </div>
-                
-                <div className="space-y-3">
-                  <div>
-                    <h4 className="text-amber-400 text-sm font-medium mb-2">Значение:</h4>
-                    <p className="text-gray-300 text-sm leading-relaxed">
-                      {selectedCardForDescription.meaning}
-                    </p>
-                  </div>
-                  
-                  <div>
-                    <h4 className="text-amber-400 text-sm font-medium mb-2">Совет:</h4>
-                    <p className="text-gray-300 text-sm leading-relaxed">
-                      {selectedCardForDescription.advice}
-                    </p>
-                  </div>
-                  
-                  <div>
-                    <h4 className="text-amber-400 text-sm font-medium mb-2">Ключевые слова:</h4>
-                    <p className="text-gray-300 text-sm leading-relaxed">
-                      {selectedCardForDescription.keywords}
-                    </p>
-                  </div>
-                  
-                  {selectedCardForDescription.detailedDescription?.displayDescription && (
-                    <div>
-                      <h4 className="text-amber-400 text-sm font-medium mb-2">Подробное описание:</h4>
-                      <p className="text-gray-300 text-sm leading-relaxed">
-                        {selectedCardForDescription.detailedDescription.displayDescription}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
+              <p className="text-gray-300 mb-6">
+                Пожалуйста, сформулируйте осмысленный вопрос, который заканчивается знаком вопроса (?). 
+                Вопрос должен содержать реальные слова и быть понятным.
+                <br /><br />
+                Например: "Стоит ли мне принять это предложение?"
+              </p>
+              <Button
+                onClick={() => setShowValidationError(false)}
+                className="w-full bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 border border-amber-400/30 rounded-lg"
+              >
+                Понятно
+              </Button>
             </motion.div>
           </motion.div>
         )}
-      </div>
+      </AnimatePresence>
 
+      </div>
     </div>
   );
 }

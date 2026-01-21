@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { motion } from 'motion/react';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/ui/Button';
 import { FloatingCard } from '@/components/FloatingCard';
 import { TarotLogo } from '@/components/TarotLogo';
 import { Sparkles, Moon, Star } from 'lucide-react';
@@ -185,21 +185,37 @@ export function WelcomeScreen({ onStart }: WelcomeScreenProps) {
               animate={{ scale: 1 }}
               transition={{ duration: 0.8, delay: 1.2, type: "spring", bounce: 0.4 }}
             >
-              <div className="w-24 h-24 mx-auto bg-gradient-to-br from-amber-400 via-orange-500 to-red-500 rounded-full flex items-center justify-center shadow-2xl relative overflow-hidden">
+              <div className="w-24 h-24 mx-auto rounded-full flex items-center justify-center shadow-2xl relative overflow-hidden">
                 <motion.div
                   className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"
                   animate={{ x: ['-100%', '100%'] }}
                   transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}
                 />
-                <span className="text-3xl font-bold text-white relative z-10">🔮</span>
+                <img
+                  src="/images/bot-logo.png"
+                  alt="Bot Logo"
+                  className="relative z-10 w-full h-full object-cover rounded-full"
+                  style={{ 
+                    width: '100%', 
+                    height: '100%',
+                    objectFit: 'cover'
+                  }}
+                  onError={(e) => {
+                    // Fallback на placeholder, если изображение не загрузилось
+                    const target = e.target as HTMLImageElement;
+                    if (target.src !== '/images/placeholder.png') {
+                      target.src = '/images/placeholder.png';
+                    }
+                  }}
+                />
               </div>
               
               {/* Glow effect */}
               <motion.div
-                className="absolute inset-0 w-24 h-24 mx-auto bg-gradient-to-br from-amber-400/50 to-orange-500/50 rounded-full blur-xl"
+                className="absolute inset-0 w-24 h-24 mx-auto bg-white/20 rounded-full blur-xl"
                 animate={{
                   scale: [1, 1.2, 1],
-                  opacity: [0.5, 0.8, 0.5],
+                  opacity: [0.3, 0.6, 0.3],
                 }}
                 transition={{
                   duration: 2,

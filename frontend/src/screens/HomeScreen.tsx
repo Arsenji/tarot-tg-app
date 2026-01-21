@@ -2,14 +2,15 @@
 
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/ui/Button';
 import { FloatingCard } from '@/components/FloatingCard';
 import { TarotLogo } from '@/components/TarotLogo';
 import BottomNavigation from '@/components/BottomNavigation';
 import { SparklesIcon, Calendar, HelpCircle, Crown, Lock } from 'lucide-react';
 import { SubscriptionStatus } from '@/components/SubscriptionStatus';
 import { SubscriptionModal } from '@/components/SubscriptionModal';
-import { useSubscriptionStatus } from '@/state/subscriptionStore';
+import { BlockedTarotModal } from '@/components/BlockedTarotModal';
+import { getTarotAvailability, TarotType, useSubscriptionStatus } from '@/state/subscriptionStore';
 
 const sparklesData = [
   { left: 10, top: 20, delay: 0, duration: 2.5 },
@@ -63,9 +64,11 @@ interface HomeScreenProps {
 
 export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThreeCards }: HomeScreenProps) => {
   const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
+  const [blockedModalOpen, setBlockedModalOpen] = useState(false);
+  const [blockedType, setBlockedType] = useState<TarotType>('daily');
+  const [blockedNextAvailableAt, setBlockedNextAvailableAt] = useState<Date | undefined>(undefined);
   // Глобальное состояние подписки (shared promise + pessimistic lock)
   const { loaded, loading, subscriptionInfo } = useSubscriptionStatus();
-  const isSubscriptionLoading = !loaded || loading;
 
   const handleOpenSubscriptionModal = () => {
     setIsSubscriptionModalOpen(true);
@@ -75,119 +78,40 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
     setIsSubscriptionModalOpen(false);
   };
 
-  const getRemainingCount = (type: 'daily' | 'three_cards' | 'yesno') => {
-    if (!subscriptionInfo) return -1;
-    switch (type) {
-      case 'daily':
-        return subscriptionInfo.remainingDailyAdvice ?? -1;
-      case 'three_cards':
-        return subscriptionInfo.remainingThreeCards ?? -1;
-      case 'yesno':
-        return subscriptionInfo.remainingYesNo ?? -1;
-      default:
-        return -1;
-    }
+  const openBlockedModal = (type: TarotType) => {
+    const availability = getTarotAvailability(type);
+    setBlockedType(type);
+    setBlockedNextAvailableAt(availability.nextAvailableAt);
+    setBlockedModalOpen(true);
   };
 
-  const getCooldownHoursRemaining = (type: 'daily' | 'three_cards' | 'yesno') => {
-    const cooldowns = subscriptionInfo?.cooldowns;
-    if (!cooldowns) return 0;
-    switch (type) {
-      case 'daily':
-        return cooldowns.dailyAdviceHoursRemaining ?? 0;
-      case 'three_cards':
-        return cooldowns.threeCardsHoursRemaining ?? 0;
-      case 'yesno':
-        return cooldowns.yesNoHoursRemaining ?? 0;
-      default:
-        return 0;
-    }
+  const closeBlockedModal = () => {
+    setBlockedModalOpen(false);
   };
 
-  const canUseType = (type: 'daily' | 'three_cards' | 'yesno') => {
-    if (!subscriptionInfo) return false;
-    switch (type) {
-      case 'daily':
-        return !!subscriptionInfo.canUseDailyAdvice;
-      case 'three_cards':
-        return !!subscriptionInfo.canUseThreeCards;
-      case 'yesno':
-        return !!subscriptionInfo.canUseYesNo;
-      default:
-        return false;
-    }
-  };
-
-  const isTypeDisabled = (type: 'daily' | 'three_cards' | 'yesno') => {
-    // Пока не получили статус с backend — ВСЁ блокируем и игнорируем клики (устраняем race condition)
-    if (isSubscriptionLoading) return true;
-    if (subscriptionInfo?.hasSubscription) return false;
-    const remaining = getRemainingCount(type);
-    const canUse = canUseType(type);
-    // Если remaining не пришёл — не показываем "использовано" по умолчанию, но уважаем canUse
-    if (remaining === -1) return !canUse;
-    return remaining === 0 || !canUse;
-  };
-
-  const handleOneCardClick = () => {
-    if (isSubscriptionLoading) return;
-    if (isTypeDisabled('daily')) {
-      // Если кнопка заблокирована, открываем модальное окно подписки
-      handleOpenSubscriptionModal();
-      return;
-    }
-    
-    // Для подписчиков - всегда разрешено
-    if (subscriptionInfo?.hasSubscription) {
-      onOneCard();
-      return;
-    }
-    
-    // Для бесплатных пользователей проверяем remainingDailyAdvice
-    const remaining = subscriptionInfo?.remainingDailyAdvice ?? 0;
-    if (remaining > 0 && subscriptionInfo?.canUseDailyAdvice) {
-      onOneCard();
-    } else {
-      handleOpenSubscriptionModal();
-    }
-  };
-
-  const handleYesNoClick = () => {
-    if (isSubscriptionLoading) return;
-    if (isTypeDisabled('yesno')) {
-      handleOpenSubscriptionModal();
-      return;
-    }
-    if (subscriptionInfo?.canUseYesNo || subscriptionInfo?.hasSubscription) {
-      onYesNo();
-    } else {
-      handleOpenSubscriptionModal();
-    }
-  };
-
-  const handleThreeCardsClick = () => {
-    if (isSubscriptionLoading) return;
-    if (isTypeDisabled('three_cards')) {
-      handleOpenSubscriptionModal();
-      return;
-    }
-    if (subscriptionInfo?.canUseThreeCards || subscriptionInfo?.hasSubscription) {
-      onThreeCards();
-    } else {
-      handleOpenSubscriptionModal();
-    }
-  };
-
-  const getRemainingText = (type: 'daily' | 'three_cards' | 'yesno') => {
-    const remaining = getRemainingCount(type);
+  const getStatusText = (type: TarotType) => {
     if (subscriptionInfo?.hasSubscription) return '';
-    if (remaining === -1) return '';
-    if (isSubscriptionLoading) return 'Проверяем доступ...';
-    if (remaining === 0) {
-      const hours = getCooldownHoursRemaining(type);
-      return hours > 0 ? `Использовано (осталось ${hours} ч)` : 'Использовано';
+    const availability = getTarotAvailability(type);
+    if (availability.allowed) return 'Доступно';
+    if (availability.nextAvailableAt) {
+      const ms = availability.nextAvailableAt.getTime() - Date.now();
+      const hours = Math.max(1, Math.ceil(ms / (60 * 60 * 1000)));
+      return `Использовано (осталось ${hours} ч)`;
     }
-    return 'Доступно';
+    return 'Использовано';
+  };
+
+  const onTarotClick = (type: TarotType, start: () => void) => {
+    // AppBootstrap не рендерит экран до loaded=true, но оставляем защиту.
+    if (!loaded || loading) return;
+
+    const availability = getTarotAvailability(type);
+    if (!availability.allowed) {
+      openBlockedModal(type);
+      return;
+    }
+
+    start();
   };
 
   return (
@@ -202,30 +126,28 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
         <div className="w-full max-w-sm space-y-4 mt-8">
           {/* One Card Button */}
           <motion.div 
-            whileHover={{ scale: (!isTypeDisabled('daily')) ? 1.02 : 1 }} 
-            whileTap={{ scale: (!isTypeDisabled('daily')) ? 0.98 : 1 }}
+            whileHover={{ scale: (getTarotAvailability('daily').allowed) ? 1.02 : 1 }} 
+            whileTap={{ scale: (getTarotAvailability('daily').allowed) ? 0.98 : 1 }}
             className="relative"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
           >
             <Button
-              onClick={handleOneCardClick}
-              disabled={isTypeDisabled('daily')}
+              onClick={() => onTarotClick('daily', onOneCard)}
               className={`w-full h-20 text-white border-2 rounded-3xl shadow-xl transition-all duration-300 backdrop-blur-sm ${
-                !isTypeDisabled('daily')
+                getTarotAvailability('daily').allowed
                   ? 'bg-slate-800/50 hover:bg-slate-700/50 border-amber-400/30 hover:border-amber-400/50 hover:shadow-2xl cursor-pointer'
-                  : 'bg-slate-800/30 border-slate-600/30 opacity-60 cursor-not-allowed pointer-events-none'
+                  : 'bg-slate-800/30 border-slate-600/30 opacity-60 cursor-not-allowed'
               }`}
-              style={{ pointerEvents: (!isTypeDisabled('daily')) ? 'auto' : 'none' }}
             >
               <div className="flex items-center space-x-6 w-full pl-2">
                 <div className={`p-3 rounded-2xl border flex-shrink-0 ${
-                  !isTypeDisabled('daily')
+                  getTarotAvailability('daily').allowed
                     ? 'bg-amber-600/20 border-amber-400/30'
                     : 'bg-slate-600/20 border-slate-500/30'
                 }`}>
-                  {!isTypeDisabled('daily') ? (
+                  {getTarotAvailability('daily').allowed ? (
                     <SparklesIcon className="w-6 h-6 text-amber-400" />
                   ) : (
                     <Lock className="w-6 h-6 text-slate-400" />
@@ -233,14 +155,14 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
                 </div>
                 <div className="text-left flex-1">
                   <div className={`text-lg font-semibold ${
-                    !isTypeDisabled('daily') ? 'text-white' : 'text-slate-400'
+                    getTarotAvailability('daily').allowed ? 'text-white' : 'text-slate-400'
                   }`}>Одна карта</div>
                   <div className={`text-sm ${
-                    !isTypeDisabled('daily') ? 'text-gray-300' : 'text-slate-500'
+                    getTarotAvailability('daily').allowed ? 'text-gray-300' : 'text-slate-500'
                   }`}>Совет дня</div>
                   {!subscriptionInfo?.hasSubscription && (
                     <div className="text-xs text-amber-400 mt-1">
-                      {getRemainingText('daily')}
+                      {getStatusText('daily')}
                     </div>
                   )}
                 </div>
@@ -250,29 +172,28 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
 
           {/* Yes/No Button */}
           <motion.div 
-            whileHover={{ scale: (!isTypeDisabled('yesno')) ? 1.02 : 1 }} 
-            whileTap={{ scale: (!isTypeDisabled('yesno')) ? 0.98 : 1 }}
+            whileHover={{ scale: (getTarotAvailability('yesNo').allowed) ? 1.02 : 1 }} 
+            whileTap={{ scale: (getTarotAvailability('yesNo').allowed) ? 0.98 : 1 }}
             className="relative"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
           >
             <Button
-              onClick={handleYesNoClick}
-              disabled={isTypeDisabled('yesno')}
+              onClick={() => onTarotClick('yesNo', onYesNo)}
               className={`w-full h-20 text-white border-2 rounded-3xl shadow-xl transition-all duration-300 backdrop-blur-sm ${
-                !isTypeDisabled('yesno')
+                getTarotAvailability('yesNo').allowed
                   ? 'bg-slate-800/50 hover:bg-slate-700/50 border-emerald-400/30 hover:border-emerald-400/50 hover:shadow-2xl'
                   : 'bg-slate-800/30 border-slate-600/30 opacity-60'
               }`}
             >
               <div className="flex items-center space-x-6 w-full pl-2">
                 <div className={`p-3 rounded-2xl border flex-shrink-0 ${
-                  !isTypeDisabled('yesno')
+                  getTarotAvailability('yesNo').allowed
                     ? 'bg-emerald-600/20 border-emerald-400/30'
                     : 'bg-slate-600/20 border-slate-500/30'
                 }`}>
-                  {!isTypeDisabled('yesno') ? (
+                  {getTarotAvailability('yesNo').allowed ? (
                     <HelpCircle className="w-6 h-6 text-emerald-400" />
                   ) : (
                     <Lock className="w-6 h-6 text-slate-400" />
@@ -280,14 +201,14 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
                 </div>
                 <div className="text-left flex-1">
                   <div className={`text-lg font-semibold ${
-                    !isTypeDisabled('yesno') ? 'text-white' : 'text-slate-400'
+                    getTarotAvailability('yesNo').allowed ? 'text-white' : 'text-slate-400'
                   }`}>Да/Нет</div>
                   <div className={`text-sm ${
-                    !isTypeDisabled('yesno') ? 'text-gray-300' : 'text-slate-500'
+                    getTarotAvailability('yesNo').allowed ? 'text-gray-300' : 'text-slate-500'
                   }`}>Быстрый ответ</div>
                   {!subscriptionInfo?.hasSubscription && (
                     <div className="text-xs text-emerald-400 mt-1">
-                      {getRemainingText('yesno')}
+                      {getStatusText('yesNo')}
                     </div>
                   )}
                 </div>
@@ -297,29 +218,28 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
 
           {/* Three Cards Button */}
           <motion.div 
-            whileHover={{ scale: (!isTypeDisabled('three_cards')) ? 1.02 : 1 }} 
-            whileTap={{ scale: (!isTypeDisabled('three_cards')) ? 0.98 : 1 }}
+            whileHover={{ scale: (getTarotAvailability('threeCards').allowed) ? 1.02 : 1 }} 
+            whileTap={{ scale: (getTarotAvailability('threeCards').allowed) ? 0.98 : 1 }}
             className="relative"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
           >
             <Button
-              onClick={handleThreeCardsClick}
-              disabled={isTypeDisabled('three_cards')}
+              onClick={() => onTarotClick('threeCards', onThreeCards)}
               className={`w-full h-20 text-white border-2 rounded-3xl shadow-xl transition-all duration-300 backdrop-blur-sm ${
-                !isTypeDisabled('three_cards')
+                getTarotAvailability('threeCards').allowed
                   ? 'bg-slate-800/50 hover:bg-slate-700/50 border-purple-400/30 hover:border-purple-400/50 hover:shadow-2xl'
                   : 'bg-slate-800/30 border-slate-600/30 opacity-60'
               }`}
             >
               <div className="flex items-center space-x-6 w-full pl-2">
                 <div className={`p-3 rounded-2xl border flex-shrink-0 ${
-                  !isTypeDisabled('three_cards')
+                  getTarotAvailability('threeCards').allowed
                     ? 'bg-purple-600/20 border-purple-400/30'
                     : 'bg-slate-600/20 border-slate-500/30'
                 }`}>
-                  {!isTypeDisabled('three_cards') ? (
+                  {getTarotAvailability('threeCards').allowed ? (
                     <Calendar className="w-6 h-6 text-purple-400" />
                   ) : (
                     <Lock className="w-6 h-6 text-slate-400" />
@@ -327,14 +247,14 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
                 </div>
                 <div className="text-left flex-1">
                   <div className={`text-lg font-semibold ${
-                    !isTypeDisabled('three_cards') ? 'text-white' : 'text-slate-400'
+                    getTarotAvailability('threeCards').allowed ? 'text-white' : 'text-slate-400'
                   }`}>Три карты</div>
                   <div className={`text-sm ${
-                    !isTypeDisabled('three_cards') ? 'text-gray-300' : 'text-slate-500'
+                    getTarotAvailability('threeCards').allowed ? 'text-gray-300' : 'text-slate-500'
                   }`}>Прошлое–Настоящее–Будущее</div>
                   {!subscriptionInfo?.hasSubscription && (
                     <div className="text-xs text-purple-400 mt-1">
-                      {getRemainingText('three_cards')}
+                      {getStatusText('threeCards')}
                     </div>
                   )}
                 </div>
@@ -350,6 +270,16 @@ export const MainScreen = ({ activeTab, onTabChange, onOneCard, onYesNo, onThree
         onClose={handleCloseSubscriptionModal}
         title="Требуется подписка"
         message="Подписка — это ваш доступ к полному функционалу. Оформите её прямо сейчас и продолжайте работу без ограничений."
+      />
+      <BlockedTarotModal
+        isOpen={blockedModalOpen}
+        onClose={closeBlockedModal}
+        onSubscribe={() => {
+          closeBlockedModal();
+          handleOpenSubscriptionModal();
+        }}
+        tarotType={blockedType}
+        nextAvailableAt={blockedNextAvailableAt}
       />
     </div>
   );

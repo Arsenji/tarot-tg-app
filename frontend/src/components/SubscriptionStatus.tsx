@@ -2,7 +2,7 @@
 
 import { motion } from 'motion/react';
 import { Crown, Star, Calendar, Sparkles, Clock } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/ui/Button';
 
 interface SubscriptionStatusProps {
   subscriptionInfo?: {

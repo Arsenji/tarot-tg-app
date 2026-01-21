@@ -1,6 +1,10 @@
 import { cache, historyCache, dailyAdviceCache, getCurrentDate } from '@/utils/cache';
 import { getValidAuthToken } from '@/utils/auth';
 
+// Minimal shared card shape used in API payloads.
+// (UI-level "TarotCard" lives in `src/types/tarot.ts`.)
+export type CardData = any;
+
 export interface ApiResponse<T> {
   success: boolean;
   data: T;
@@ -39,12 +43,17 @@ export interface DailyAdviceResponse {
   card: {
     name: string;
     category: string;
+    // optional compatibility fields (used by screens)
+    isReversed?: boolean;
+    image?: string;
+    imagePath?: string;
     uprightImage: string;
     reversedImage: string;
     uprightInterpretation: string;
     reversedInterpretation: string;
   };
   interpretation: string;
+  advice?: string;
   category: string;
 }
 
@@ -52,6 +61,10 @@ export interface YesNoResult {
   card: {
     name: string;
     category: string;
+    // optional compatibility fields (used by screens)
+    isReversed?: boolean;
+    image?: string;
+    imagePath?: string;
     uprightImage: string;
     reversedImage: string;
     uprightInterpretation: string;
@@ -183,7 +196,7 @@ class ApiService {
     }
   }
 
-  async getDailyAdvice(): Promise<ApiResponse<String>> {
+  async getDailyAdvice(): Promise<ApiResponse<DailyAdviceResponse>> {
     // Отключаем кэширование для получения разных карт каждый раз
     const response = await this.request<DailyAdviceResponse>('/api/tarot/daily-advice', {
       method: 'POST',
