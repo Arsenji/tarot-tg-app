@@ -128,18 +128,6 @@ export function bootstrapSubscriptionStatus(): Promise<void> {
   return inFlight;
 }
 
-/**
- * Принудительно обновляет статус (например, после использования расклада).
- * Внутри всё равно используется shared in-flight Promise (не будет параллельных дублей).
- */
-export function refreshSubscriptionStatus(): Promise<void> {
-  // если уже грузим — переиспользуем текущий запрос
-  if (inFlight) return inFlight;
-  // сбрасываем loaded, чтобы UI снова ушёл в pessimistic lock до свежего ответа
-  setState({ loaded: false });
-  return bootstrapSubscriptionStatus();
-}
-
 export function useSubscriptionStatus(): SubscriptionState {
   const [snap, setSnap] = useState<SubscriptionState>(getSubscriptionSnapshot());
 

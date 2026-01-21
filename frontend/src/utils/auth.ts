@@ -19,9 +19,26 @@ export const getAuthToken = async (): Promise<string | null> => {
     // Сначала проверяем, есть ли токен в localStorage
     let token = localStorage.getItem('authToken');
     
-    if (!token && typeof window !== 'undefined' && (window as any).Telegram?.WebApp?.initData) {
-      // Если токена нет, получаем его через Telegram WebApp
-      const initData = (window as any).Telegram.WebApp.initData;
+    if (!token && typeof window !== 'undefined') {
+      // Если токена нет, получаем его через Telegram WebApp.
+      // ВАЖНО: на старте приложения `window.Telegram`/`initData` может быть ещё не готов,
+      // поэтому пробуем оба источника: нативный объект Telegram и SDK (@twa-dev/sdk).
+      let initData: string | undefined = (window as any).Telegram?.WebApp?.initData;
+
+      if (!initData) {
+        try {
+          const TWA = await import('@twa-dev/sdk');
+          const WebApp = (TWA as any).WebApp || (TWA as any).default?.WebApp;
+          if (WebApp) {
+            WebApp.ready?.();
+            initData = WebApp.initData;
+          }
+        } catch {
+          // ignore: SDK может быть недоступен вне Telegram
+        }
+      }
+
+      if (!initData) return token;
       
       const authResponse = await fetch(getApiEndpoint('/auth/telegram'), {
         method: 'POST',

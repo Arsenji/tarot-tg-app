@@ -8,11 +8,7 @@ import { ThreeCardsScreen } from '@/screens/ThreeCardsScreen';
 import { YesNoScreen } from '@/screens/YesNoScreen';
 import { HistoryScreen } from '@/screens/HistoryScreen';
 import { initPerformanceMonitoring } from '@/utils/performance';
-import { bootstrapSubscriptionStatus, getSubscriptionSnapshot, refreshSubscriptionStatus } from '@/state/subscriptionStore';
-
-// Стартуем запрос статуса подписки максимально рано (до рендера главного экрана).
-// Shared Promise гарантирует отсутствие дублей.
-bootstrapSubscriptionStatus().catch(() => {});
+import { getSubscriptionSnapshot } from '@/state/subscriptionStore';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<'home' | 'history'>('home');
@@ -31,11 +27,6 @@ export default function Home() {
                     WebApp.ready();
                     WebApp.expand();
                   }
-
-                  // ВАЖНО: повторно триггерим bootstrap сразу после ready(),
-                  // чтобы запрос статуса подписки стартовал как только Telegram initData/токен доступны.
-                  // Shared Promise гарантирует отсутствие дублей.
-                  bootstrapSubscriptionStatus().catch(() => {});
                 }).catch(() => {
           // Игнорируем ошибки если SDK недоступен
           console.log('Telegram WebApp SDK not available');
@@ -56,25 +47,19 @@ export default function Home() {
   const handleTabChange = (tab: 'home' | 'history') => {
     // Если пользователь пытается перейти на историю, проверяем подписку
     if (tab === 'history') {
-      // Проверяем подписку через API (не блокируем переключение)
       checkSubscriptionForHistory();
     } else {
       setActiveTab(tab);
     }
   };
 
-  const checkSubscriptionForHistory = async () => {
-    try {
-      // Источник истины: глобальный стор (один запрос + shared promise)
-      await bootstrapSubscriptionStatus();
-      const snap = getSubscriptionSnapshot();
-      if (snap.subscriptionInfo?.hasSubscription) {
-        setActiveTab('history');
-      } else {
-        showSubscriptionModal();
-      }
-    } catch (error) {
-      // При любой ошибке показываем модальное окно о подписке
+  const checkSubscriptionForHistory = () => {
+    // ВАЖНО: никаких запросов статуса подписки из действий пользователя.
+    // История доступна только при активной подписке, смотрим на уже загруженный глобальный стор.
+    const snap = getSubscriptionSnapshot();
+    if (snap.subscriptionInfo?.hasSubscription) {
+      setActiveTab('history');
+    } else {
       showSubscriptionModal();
     }
   };
@@ -180,20 +165,14 @@ export default function Home() {
       case 'oneCard':
         return <OneCardScreen onBack={() => {
           setCurrentScreen('main');
-          // Обновляем статус подписки после использования Daily Advice
-          refreshSubscriptionStatus();
         }} />;
       case 'threeCards':
         return <ThreeCardsScreen onBack={() => {
           setCurrentScreen('main');
-          // Обновляем статус подписки после возврата с экрана Three Cards
-          refreshSubscriptionStatus();
         }} />;
       case 'yesNo':
         return <YesNoScreen onBack={() => {
           setCurrentScreen('main');
-          // Обновляем статус подписки после возврата с экрана Yes/No
-          refreshSubscriptionStatus();
         }} />;
       case 'main':
       default:
