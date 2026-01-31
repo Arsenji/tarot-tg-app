@@ -56,22 +56,22 @@ export interface PaymentRequest {
 export const SUBSCRIPTION_PLANS = {
   weekly: {
     name: 'Недельная подписка',
-    price: '99.00',
+    price: '299.00',
     duration: 7
   },
   monthly: {
     name: 'Месячная подписка',
-    price: '299.00',
+    price: '699.00',
     duration: 30
   },
   quarterly: {
     name: 'Квартальная подписка',
-    price: '799.00',
+    price: '1999.00',
     duration: 90
   },
   yearly: {
     name: 'Годовая подписка',
-    price: '2990.00',
+    price: '10990.00',
     duration: 365
   }
 };
