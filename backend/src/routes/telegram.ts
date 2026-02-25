@@ -41,4 +41,3 @@ router.get('/webhook-info', async (req, res) => {
 });
 
 export default router;
-
