@@ -9,7 +9,8 @@
     "start": "node dist/index.js",
     "clean": "rm -rf dist",
     "test": "jest",
-    "generate-admin-hash": "node scripts/generateAdminHash.js"
+    "generate-admin-hash": "node scripts/generateAdminHash.js",
+    "generate-jwt-secret": "node scripts/generateJwtSecret.js"
   },
   "keywords": [
     "tarot",

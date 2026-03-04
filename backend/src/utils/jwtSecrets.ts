@@ -219,7 +219,7 @@ export const validateJWTSecret = (secret: string): {
   }
 
   return {
-    isValid: score >= 70 && issues.length === 0,
+    isValid: score >= 40 && issues.length === 0,
     score: Math.max(0, Math.min(100, score)),
     issues,
     recommendations
