@@ -8,7 +8,8 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "clean": "rm -rf dist",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest",
+    "generate-admin-hash": "node scripts/generateAdminHash.js"
   },
   "keywords": [
     "tarot",
@@ -46,6 +47,8 @@
     "isomorphic-dompurify": "^2.9.0"
   },
   "devDependencies": {
+    "@types/jest": "^29.5.12",
+    "@types/supertest": "^6.0.2",
     "@types/express": "^4.17.21",
     "@types/cors": "^2.8.17",
     "@types/morgan": "^1.9.9",
@@ -56,7 +59,10 @@
     "@types/ioredis": "^5.0.0",
     "nodemon": "^3.0.2",
     "ts-node": "^10.9.2",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "jest": "^29.7.0",
+    "supertest": "^6.3.4",
+    "ts-jest": "^29.1.2"
   },
   "engines": {
     "node": ">=20.0.0",

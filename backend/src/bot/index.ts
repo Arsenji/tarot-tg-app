@@ -748,7 +748,7 @@ const startBot = async () => {
 
     // Проверяем режим работы бота (webhook или getUpdates)
     const useWebhook = process.env.TELEGRAM_USE_WEBHOOK === 'true';
-    const webhookUrl = process.env.TELEGRAM_WEBHOOK_URL;
+    const webhookUrl = process.env.WEBHOOK_URL || process.env.TELEGRAM_WEBHOOK_URL;
 
     if (useWebhook && webhookUrl) {
       // Режим webhook - отключаем getUpdates и устанавливаем webhook
@@ -759,7 +759,7 @@ const startBot = async () => {
         await bot.telegram.deleteWebhook({ drop_pending_updates: true });
         logger.info('Deleted existing webhook');
         
-        // Устанавливаем новый webhook
+        // Устанавливаем webhook автоматически из env
         await bot.telegram.setWebhook(webhookUrl, { drop_pending_updates: true });
         logger.info(`Webhook set to: ${webhookUrl}`);
         

@@ -115,6 +115,32 @@ src/
 При создании нового сообщения, админ получает уведомление в Telegram.
 При отправке ответа, сообщение доставляется пользователю в Telegram.
 
+## Admin setup
+
+### 1. Генерация хеша пароля
+
+```bash
+cd backend
+npm run generate-admin-hash -- yourStrongPassword
+```
+
+Или интерактивно (пароль не будет виден в терминале):
+
+```bash
+npm run generate-admin-hash
+```
+
+### 2. Добавление в .env
+
+Скопируйте полученный хеш в `.env`:
+
+```env
+ADMIN_PASSWORD_HASH=$2a$10$...
+ADMIN_USERNAME=admin
+```
+
+⚠️ **Важно:** `ADMIN_PASSWORD_HASH` обязателен. Без него сервер не запустится.
+
 ## Безопасность
 
 - JWT токены для аутентификации

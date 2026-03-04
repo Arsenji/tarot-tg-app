@@ -16,24 +16,34 @@ export class AuthController {
         return;
       }
 
-      // Проверяем учетные данные
       const adminUsername = process.env.ADMIN_USERNAME || 'admin';
-      const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
+      const adminPasswordHash = process.env.ADMIN_PASSWORD_HASH;
+
+      if (!adminPasswordHash) {
+        logger.error('ADMIN_PASSWORD_HASH is not configured');
+        res.status(500).json({ error: 'Server configuration error' });
+        return;
+      }
 
       if (username !== adminUsername) {
         res.status(401).json({ error: 'Invalid credentials' });
         return;
       }
 
-      const isValidPassword = await bcrypt.compare(password, await bcrypt.hash(adminPassword, 10));
+      const isMatch = await bcrypt.compare(password, adminPasswordHash);
 
-      if (!isValidPassword) {
+      if (!isMatch) {
         res.status(401).json({ error: 'Invalid credentials' });
         return;
       }
 
-      // Генерируем JWT токен
-      const jwtSecret = process.env.JWT_SECRET || 'fallback-secret';
+      const jwtSecret = process.env.JWT_SECRET;
+      if (!jwtSecret) {
+        logger.error('JWT_SECRET is not configured');
+        res.status(500).json({ error: 'Server configuration error' });
+        return;
+      }
+
       const token = jwt.sign(
         { username, role: 'admin' },
         jwtSecret,
@@ -50,7 +60,7 @@ export class AuthController {
         data: response
       });
     } catch (error) {
-      console.error('Error during login:', error);
+      logger.error('Error during login', { error });
       res.status(500).json({ error: 'Internal server error' });
     }
   }
@@ -63,7 +73,7 @@ export class AuthController {
         data: { valid: true }
       });
     } catch (error) {
-      console.error('Error verifying token:', error);
+      logger.error('Error verifying token', { error });
       res.status(500).json({ error: 'Internal server error' });
     }
   }
@@ -121,8 +131,14 @@ export class AuthController {
         // Продолжаем выполнение, но пользователь может не быть в БД
       }
 
+      const jwtSecret = process.env.JWT_SECRET;
+      if (!jwtSecret) {
+        logger.error('JWT_SECRET is not configured');
+        res.status(500).json({ error: 'Server configuration error' });
+        return;
+      }
+
       // Генерируем JWT токен для пользователя
-      const jwtSecret = process.env.JWT_SECRET || 'fallback-secret';
       const token = jwt.sign(
         { 
           userId: userId,
@@ -150,7 +166,7 @@ export class AuthController {
         data: response
       });
     } catch (error) {
-      console.error('Error during Telegram auth:', error);
+      logger.error('Error during Telegram auth', { error });
       res.status(500).json({ error: 'Internal server error' });
     }
   }
@@ -176,7 +192,7 @@ export class AuthController {
       // Получаем секретный ключ бота
       const botToken = process.env.TELEGRAM_BOT_TOKEN;
       if (!botToken) {
-        console.error('TELEGRAM_BOT_TOKEN not found in environment variables');
+        logger.error('TELEGRAM_BOT_TOKEN not found in environment variables');
         return false;
       }
 
@@ -194,7 +210,7 @@ export class AuthController {
 
       return computedHash === hash;
     } catch (error) {
-      console.error('Error verifying Telegram auth data:', error);
+      logger.error('Error verifying Telegram auth data', { error });
       return false;
     }
   }

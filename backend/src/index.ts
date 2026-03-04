@@ -1,15 +1,17 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
+// Валидация env (при ошибке — process.exit(1))
+import './utils/envValidation';
+
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
-import dotenv from 'dotenv';
 import mongoose from 'mongoose';
 import { connectDB } from './utils/database';
 import logger from './utils/logger';
 import { startBot } from './bot/index';
-
-// Загружаем переменные окружения
-dotenv.config();
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3001;
@@ -102,10 +104,12 @@ app.get('/health', (req, res) => {
 import tarotRoutes from './routes/tarot';
 import subscriptionRoutes from './routes/subscription';
 import authRoutes from './routes/auth';
-
+import telegramRoutes from './routes/telegram';
+ 
 app.use('/api/tarot', tarotRoutes);
 app.use('/api/subscription', subscriptionRoutes);
 app.use('/api/auth', authRoutes);
+ app.use('/api/telegram', telegramRoutes);
 
 // Обработка ошибок
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

@@ -16,6 +16,9 @@ interface EnvConfig {
   TELEGRAM_BOT_TOKEN: string;
   ADMIN_TELEGRAM_ID?: string;
   
+  // Admin (для админ-логина)
+  ADMIN_PASSWORD_HASH: string;
+  
   // OpenAI
   OPENAI_API_KEY: string;
   
@@ -46,6 +49,7 @@ class EnvValidator {
       JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '30d',
       TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN || '',
       ADMIN_TELEGRAM_ID: process.env.ADMIN_TELEGRAM_ID,
+      ADMIN_PASSWORD_HASH: process.env.ADMIN_PASSWORD_HASH || '',
       OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
       YOOKASSA_SHOP_ID: process.env.YOOKASSA_SHOP_ID,
       YOOKASSA_SECRET_KEY: process.env.YOOKASSA_SECRET_KEY,
@@ -64,9 +68,11 @@ class EnvValidator {
     this.validateRequired('MONGODB_URI', this.config.MONGODB_URI);
     this.validateRequired('JWT_SECRET', this.config.JWT_SECRET);
     this.validateRequired('TELEGRAM_BOT_TOKEN', this.config.TELEGRAM_BOT_TOKEN);
+    this.validateRequired('ADMIN_PASSWORD_HASH', this.config.ADMIN_PASSWORD_HASH);
     this.validateRequired('OPENAI_API_KEY', this.config.OPENAI_API_KEY);
 
     // Format validations
+    this.validateAdminPasswordHash();
     this.validateMongoUri();
     this.validateJwtSecret();
     this.validateTelegramToken();
@@ -88,6 +94,12 @@ class EnvValidator {
   private validateRequired(name: string, value: string): void {
     if (!value || value.trim() === '') {
       this.errors.push(`❌ ${name} is required but not set`);
+    }
+  }
+
+  private validateAdminPasswordHash(): void {
+    if (this.config.ADMIN_PASSWORD_HASH && !this.config.ADMIN_PASSWORD_HASH.match(/^\$2[aby]\$\d{2}\$/)) {
+      this.errors.push(`❌ ADMIN_PASSWORD_HASH must be a valid bcrypt hash (e.g. $2a$10$...)`);
     }
   }
 
@@ -209,11 +221,11 @@ export const isEnvValid = validation.isValid;
 // Экспортируем валидатор для использования в других местах
 export { envValidator };
 
-// Логируем результат валидации
+// При ошибке валидации — сервер не должен запускаться
 if (!isEnvValid) {
   console.error('🚨 Environment validation failed:');
   envErrors.forEach(error => console.error(error));
   console.error('\n📋 Please check your .env file and fix the issues above.');
-} else {
-  console.log('✅ Environment validation passed');
+  process.exit(1);
 }
+console.log('✅ Environment validation passed');
