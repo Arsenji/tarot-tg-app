@@ -1,12 +1,65 @@
 import express from 'express';
 import { authenticateToken } from '../middleware/auth';
+import { verifyYooKassaSignature } from '../middleware/verifyYooKassaSignature';
 import { checkSubscriptionStatus, activateSubscription } from '../utils/subscription';
 import { YooKassaService, SUBSCRIPTION_PLANS } from '../services/yookassa';
 import logger from '../utils/logger';
 
 const router = express.Router();
 
-// Middleware для всех маршрутов
+// Идемпотентность: обработанные paymentId (не дублируем подписку при повторе webhook)
+const processedPaymentIds = new Set<string>();
+
+// Webhook YooKassa — БЕЗ JWT (server-to-server), только проверка подписи
+router.post('/webhook', verifyYooKassaSignature, async (req, res) => {
+  try {
+    const { event, object } = req.body;
+
+    if (event === 'payment.succeeded') {
+      const payment = object;
+      const paymentId = payment?.id;
+
+      if (paymentId && processedPaymentIds.has(paymentId)) {
+        logger.info('Webhook: payment already processed (idempotent)', { paymentId });
+        res.status(200).json({ status: 'ok' });
+        return;
+      }
+
+      if (payment.metadata && payment.metadata.userId && payment.metadata.plan) {
+        const userId = parseInt(payment.metadata.userId);
+        const plan = payment.metadata.plan as keyof typeof SUBSCRIPTION_PLANS;
+
+        if (userId && SUBSCRIPTION_PLANS[plan]) {
+          const durationDays = SUBSCRIPTION_PLANS[plan].duration;
+          const success = await activateSubscription(userId, durationDays);
+
+          if (success) {
+            if (paymentId) processedPaymentIds.add(paymentId);
+            logger.info('Subscription activated via webhook', {
+              userId,
+              plan,
+              paymentId: payment.id,
+              amount: payment.amount?.value,
+            });
+          } else {
+            logger.error('Failed to activate subscription via webhook', {
+              userId,
+              plan,
+              paymentId: payment.id,
+            });
+          }
+        }
+      }
+    }
+
+    res.status(200).json({ status: 'ok' });
+  } catch (error) {
+    logger.error('Webhook error', { error, body: req.body });
+    res.status(500).json({ status: 'error', message: 'Webhook processing failed' });
+  }
+});
+
+// Middleware для остальных маршрутов (требуют JWT)
 router.use(authenticateToken);
 
 // Получить статус подписки
@@ -78,50 +131,6 @@ router.post('/create-payment', async (req: any, res) => {
     res.status(500).json({
       success: false,
       error: 'Internal server error'
-    });
-  }
-});
-
-// Webhook для обработки платежей YooKassa
-router.post('/webhook', async (req, res) => {
-  try {
-    const { event, object } = req.body;
-    
-    if (event === 'payment.succeeded') {
-      const payment = object;
-      
-      if (payment.metadata && payment.metadata.userId && payment.metadata.plan) {
-        const userId = parseInt(payment.metadata.userId);
-        const plan = payment.metadata.plan as keyof typeof SUBSCRIPTION_PLANS;
-        
-        if (userId && SUBSCRIPTION_PLANS[plan]) {
-          const durationDays = SUBSCRIPTION_PLANS[plan].duration;
-          const success = await activateSubscription(userId, durationDays);
-          
-          if (success) {
-            logger.info('Subscription activated via webhook', {
-              userId,
-              plan,
-              paymentId: payment.id,
-              amount: payment.amount.value
-            });
-          } else {
-            logger.error('Failed to activate subscription via webhook', {
-              userId,
-              plan,
-              paymentId: payment.id
-            });
-          }
-        }
-      }
-    }
-    
-    res.status(200).json({ received: true });
-  } catch (error) {
-    logger.error('Webhook error', { error, body: req.body });
-    res.status(500).json({
-      success: false,
-      error: 'Webhook processing failed'
     });
   }
 });
