@@ -3,6 +3,7 @@ import { authenticateToken } from '../middleware/auth';
 import { verifyYooKassaSignature } from '../middleware/verifyYooKassaSignature';
 import { checkSubscriptionStatus, activateSubscription } from '../utils/subscription';
 import { YooKassaService, SUBSCRIPTION_PLANS } from '../services/yookassa';
+import { Payment } from '../models/Payment';
 import logger from '../utils/logger';
 
 const router = express.Router();
@@ -34,7 +35,20 @@ router.post('/webhook', verifyYooKassaSignature, async (req, res) => {
           const success = await activateSubscription(userId, durationDays);
 
           if (success) {
-            if (paymentId) processedPaymentIds.add(paymentId);
+            if (paymentId) {
+              processedPaymentIds.add(paymentId);
+              await Payment.findOneAndUpdate(
+                { paymentId },
+                {
+                  paymentId,
+                  userId: userId.toString(),
+                  status: 'succeeded',
+                  subscriptionActivated: true,
+                  plan,
+                },
+                { upsert: true, new: true }
+              );
+            }
             logger.info('Subscription activated via webhook', {
               userId,
               plan,
@@ -115,6 +129,18 @@ router.post('/create-payment', async (req: any, res) => {
         error: 'Failed to create payment'
       });
     }
+
+    await Payment.findOneAndUpdate(
+      { paymentId: payment.id },
+      {
+        paymentId: payment.id,
+        userId: userId.toString(),
+        status: 'pending',
+        subscriptionActivated: false,
+        plan,
+      },
+      { upsert: true, new: true }
+    );
 
     res.json({
       success: true,

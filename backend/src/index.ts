@@ -110,11 +110,13 @@ import tarotRoutes from './routes/tarot';
 import subscriptionRoutes from './routes/subscription';
 import authRoutes from './routes/auth';
 import telegramRoutes from './routes/telegram';
- 
+import paymentRoutes from './routes/payment';
+
 app.use('/api/tarot', tarotRoutes);
 app.use('/api/subscription', subscriptionRoutes);
 app.use('/api/auth', authRoutes);
- app.use('/api/telegram', telegramRoutes);
+app.use('/api/telegram', telegramRoutes);
+app.use('/api/payment', paymentRoutes);
 
 // Обработка ошибок
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
