@@ -1,4 +1,5 @@
 import express from 'express';
+import { randomUUID } from 'crypto';
 import { authenticateToken } from '../middleware/auth';
 import { verifyYooKassaSignature } from '../middleware/verifyYooKassaSignature';
 import { checkSubscriptionStatus, activateSubscription } from '../utils/subscription';
@@ -113,7 +114,10 @@ router.post('/create-payment', async (req: any, res) => {
       process.env.YOOKASSA_SECRET_KEY || ''
     );
 
-    const returnUrl = `${process.env.FRONTEND_URL}/payment/success`;
+    // ref в return_url — payment.id от YooKassa приходит только после создания,
+    // поэтому используем ref для lookup после редиректа
+    const returnRef = randomUUID();
+    const returnUrl = `${process.env.FRONTEND_URL}/payment-result?paymentId=${returnRef}`;
     const cancelUrl = `${process.env.FRONTEND_URL}/payment/cancel`;
 
     const payment = await yooKassa.createPayment(
@@ -138,6 +142,7 @@ router.post('/create-payment', async (req: any, res) => {
         status: 'pending',
         subscriptionActivated: false,
         plan,
+        returnRef,
       },
       { upsert: true, new: true }
     );
@@ -146,6 +151,7 @@ router.post('/create-payment', async (req: any, res) => {
       success: true,
       payment: {
         id: payment.id,
+        paymentId: payment.id,
         confirmationUrl: payment.confirmation.confirmation_url,
         amount: payment.amount.value,
         currency: payment.amount.currency,

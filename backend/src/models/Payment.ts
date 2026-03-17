@@ -6,6 +6,7 @@ export interface IPayment extends Document {
   status: 'pending' | 'succeeded' | 'canceled';
   subscriptionActivated: boolean;
   plan?: string;
+  returnRef?: string; // ref из return_url для lookup после редиректа
   createdAt: Date;
   updatedAt: Date;
 }
@@ -35,11 +36,17 @@ const PaymentSchema = new Schema<IPayment>({
     type: String,
     default: null,
   },
+  returnRef: {
+    type: String,
+    sparse: true,
+    index: true,
+  },
 }, {
   timestamps: true,
 });
 
 PaymentSchema.index({ paymentId: 1 });
 PaymentSchema.index({ userId: 1, createdAt: -1 });
+PaymentSchema.index({ returnRef: 1 });
 
 export const Payment = mongoose.model<IPayment>('Payment', PaymentSchema);

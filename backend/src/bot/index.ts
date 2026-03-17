@@ -1,7 +1,9 @@
+import { randomUUID } from 'crypto';
 import { Telegraf, Context, Markup } from 'telegraf';
 import { User } from '../models/User';
 import { SupportMessage } from '../models/SupportMessage';
 import { Review } from '../models/Review';
+import { Payment } from '../models/Payment';
 import { checkSubscriptionStatus } from '../utils/subscription';
 import logger from '../utils/logger';
 import { YooKassaService, SUBSCRIPTION_PLANS } from '../services/yookassa';
@@ -417,7 +419,8 @@ const initializeBot = () => {
 
       // Реальный режим с Юкассой
       try {
-        const returnUrl = `${process.env.FRONTEND_URL}/payment/success`;
+        const returnRef = randomUUID();
+        const returnUrl = `${process.env.FRONTEND_URL}/payment-result?paymentId=${returnRef}`;
         const payment = await yooKassa.createPayment(
           userId.toString(),
           planType,
@@ -428,6 +431,19 @@ const initializeBot = () => {
           await ctx.answerCbQuery('Ошибка создания платежа');
           return;
         }
+
+        await Payment.findOneAndUpdate(
+          { paymentId: payment.id },
+          {
+            paymentId: payment.id,
+            userId: userId.toString(),
+            status: 'pending',
+            subscriptionActivated: false,
+            plan: planType,
+            returnRef,
+          },
+          { upsert: true, new: true }
+        );
 
         await ctx.answerCbQuery('Перенаправляем на оплату...');
         await ctx.editMessageText(

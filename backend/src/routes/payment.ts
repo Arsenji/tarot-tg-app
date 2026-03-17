@@ -24,8 +24,11 @@ router.get('/status/:paymentId', async (req: any, res) => {
       });
     }
 
-    // 1. Проверяем нашу БД (платежи из WebApp create-payment)
-    const paymentRecord = await Payment.findOne({ paymentId, userId });
+    // 1. Проверяем нашу БД: по paymentId (YooKassa id) или по returnRef (из URL после редиректа)
+    let paymentRecord = await Payment.findOne({ paymentId, userId });
+    if (!paymentRecord) {
+      paymentRecord = await Payment.findOne({ returnRef: paymentId, userId });
+    }
 
     if (paymentRecord) {
       return res.json({
