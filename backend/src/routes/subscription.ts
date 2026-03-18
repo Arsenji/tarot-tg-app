@@ -9,68 +9,70 @@ import logger from '../utils/logger';
 
 const router = express.Router();
 
-// Идемпотентность: обработанные paymentId (не дублируем подписку при повторе webhook)
-const processedPaymentIds = new Set<string>();
-
 // Webhook YooKassa — БЕЗ JWT (server-to-server), только проверка подписи
+// Идемпотентность: атомарный findOneAndUpdate по processed: false
 router.post('/webhook', verifyYooKassaSignature, async (req, res) => {
   try {
-    const { event, object } = req.body;
+    const { event, object: paymentData } = req.body;
 
-    if (event === 'payment.succeeded') {
-      const payment = object;
-      const paymentId = payment?.id;
+    if (event !== 'payment.succeeded') {
+      return res.status(200).json({ status: 'ok', message: 'Event ignored' });
+    }
 
-      if (paymentId && processedPaymentIds.has(paymentId)) {
-        logger.info('Webhook: payment already processed (idempotent)', { paymentId });
-        res.status(200).json({ status: 'ok' });
-        return;
-      }
+    const paymentId = paymentData?.id;
+    if (!paymentId) {
+      logger.warn('Webhook: missing payment id', { body: req.body });
+      return res.status(200).json({ status: 'ok', message: 'Event ignored' });
+    }
 
-      if (payment.metadata && payment.metadata.userId && payment.metadata.plan) {
-        const userId = parseInt(payment.metadata.userId);
-        const plan = payment.metadata.plan as keyof typeof SUBSCRIPTION_PLANS;
+    // Атомарное обновление: только если processed: false (избегаем race condition)
+    const payment = await Payment.findOneAndUpdate(
+      { paymentId, processed: false },
+      {
+        $set: {
+          status: 'succeeded',
+          subscriptionActivated: true,
+          processed: true,
+        },
+      },
+      { new: true }
+    );
 
-        if (userId && SUBSCRIPTION_PLANS[plan]) {
-          const durationDays = SUBSCRIPTION_PLANS[plan].duration;
-          const success = await activateSubscription(userId, durationDays);
+    if (!payment) {
+      logger.info('Webhook: payment already processed or not found (idempotent)', { paymentId });
+      return res.status(200).json({ status: 'ok', message: 'Already processed' });
+    }
 
-          if (success) {
-            if (paymentId) {
-              processedPaymentIds.add(paymentId);
-              await Payment.findOneAndUpdate(
-                { paymentId },
-                {
-                  paymentId,
-                  userId: userId.toString(),
-                  status: 'succeeded',
-                  subscriptionActivated: true,
-                  plan,
-                },
-                { upsert: true, new: true }
-              );
-            }
-            logger.info('Subscription activated via webhook', {
-              userId,
-              plan,
-              paymentId: payment.id,
-              amount: payment.amount?.value,
-            });
-          } else {
-            logger.error('Failed to activate subscription via webhook', {
-              userId,
-              plan,
-              paymentId: payment.id,
-            });
-          }
+    // Активируем подписку только при первом успешном обновлении
+    if (paymentData.metadata?.userId && paymentData.metadata?.plan) {
+      const userId = parseInt(paymentData.metadata.userId);
+      const plan = paymentData.metadata.plan as keyof typeof SUBSCRIPTION_PLANS;
+
+      if (userId && SUBSCRIPTION_PLANS[plan]) {
+        const durationDays = SUBSCRIPTION_PLANS[plan].duration;
+        const success = await activateSubscription(userId, durationDays);
+
+        if (success) {
+          logger.info('Subscription activated via webhook', {
+            userId,
+            plan,
+            paymentId,
+            amount: paymentData.amount?.value,
+          });
+        } else {
+          logger.error('Failed to activate subscription via webhook', {
+            userId,
+            plan,
+            paymentId,
+          });
         }
       }
     }
 
-    res.status(200).json({ status: 'ok' });
+    return res.status(200).json({ status: 'ok' });
   } catch (error) {
     logger.error('Webhook error', { error, body: req.body });
-    res.status(500).json({ status: 'error', message: 'Webhook processing failed' });
+    return res.status(500).json({ status: 'error', message: 'Webhook processing failed' });
   }
 });
 
@@ -141,6 +143,7 @@ router.post('/create-payment', async (req: any, res) => {
         userId: userId.toString(),
         status: 'pending',
         subscriptionActivated: false,
+        processed: false,
         plan,
         returnRef,
       },

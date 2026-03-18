@@ -439,6 +439,7 @@ const initializeBot = () => {
             userId: userId.toString(),
             status: 'pending',
             subscriptionActivated: false,
+            processed: false,
             plan: planType,
             returnRef,
           },
