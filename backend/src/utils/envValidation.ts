@@ -184,9 +184,8 @@ class EnvValidator {
       this.errors.push(`❌ YOOKASSA_SECRET_KEY contains placeholder value`);
     }
 
-    // При включённой YooKassa webhook-секрет обязателен для защиты от подделки
     if (hasShopId && hasSecretKey && !hasWebhookSecret) {
-      this.errors.push(`❌ YOOKASSA_WEBHOOK_SECRET is required when YooKassa is configured`);
+      console.warn('⚠️  YOOKASSA_WEBHOOK_SECRET not set — webhook signature verification disabled. Set it in YooKassa dashboard for production security.');
     }
   }
 

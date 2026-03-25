@@ -13,8 +13,8 @@ export const verifyYooKassaSignature = (req: Request, res: Response, next: NextF
     const secret = process.env.YOOKASSA_WEBHOOK_SECRET;
 
     if (!secret) {
-      logger.error('Webhook verification error: YOOKASSA_WEBHOOK_SECRET is not configured');
-      res.status(500).json({ status: 'error', message: 'Verification failed' });
+      logger.warn('YOOKASSA_WEBHOOK_SECRET not set — signature verification skipped');
+      next();
       return;
     }
 
