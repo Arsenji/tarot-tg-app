@@ -1,7 +1,7 @@
 import express from 'express';
 import { randomUUID } from 'crypto';
 import { authenticateToken } from '../middleware/auth';
-import { verifyYooKassaSignature } from '../middleware/verifyYooKassaSignature';
+import { verifyYooKassaWebhook } from '../middleware/verifyYooKassaSignature';
 import { checkSubscriptionStatus, activateSubscription } from '../utils/subscription';
 import { YooKassaService, SUBSCRIPTION_PLANS } from '../services/yookassa';
 import { Payment } from '../models/Payment';
@@ -9,9 +9,9 @@ import logger from '../utils/logger';
 
 const router = express.Router();
 
-// Webhook YooKassa — БЕЗ JWT (server-to-server), только проверка подписи
+// Webhook YooKassa — БЕЗ JWT (server-to-server), IP whitelist + проверка статуса через API
 // Идемпотентность: атомарный findOneAndUpdate по processed: false
-router.post('/webhook', verifyYooKassaSignature, async (req, res) => {
+router.post('/webhook', verifyYooKassaWebhook, async (req, res) => {
   try {
     const { event, object: paymentData } = req.body;
 
@@ -23,6 +23,22 @@ router.post('/webhook', verifyYooKassaSignature, async (req, res) => {
     if (!paymentId) {
       logger.warn('Webhook: missing payment id', { body: req.body });
       return res.status(200).json({ status: 'ok', message: 'Event ignored' });
+    }
+
+    // Проверка 2: подтверждаем статус платежа через API YooKassa (защита от подделки)
+    const yooKassa = new YooKassaService(
+      process.env.YOOKASSA_SHOP_ID || '',
+      process.env.YOOKASSA_SECRET_KEY || ''
+    );
+    const verifiedPayment = await yooKassa.getPayment(paymentId);
+
+    if (!verifiedPayment || verifiedPayment.status !== 'succeeded') {
+      logger.warn('Webhook: payment status not confirmed via API', {
+        paymentId,
+        webhookStatus: paymentData.status,
+        apiStatus: verifiedPayment?.status || 'not found',
+      });
+      return res.status(200).json({ status: 'ok', message: 'Payment not confirmed' });
     }
 
     // Атомарное обновление: только если processed: false (избегаем race condition)
@@ -43,10 +59,11 @@ router.post('/webhook', verifyYooKassaSignature, async (req, res) => {
       return res.status(200).json({ status: 'ok', message: 'Already processed' });
     }
 
-    // Активируем подписку только при первом успешном обновлении
-    if (paymentData.metadata?.userId && paymentData.metadata?.plan) {
-      const userId = parseInt(paymentData.metadata.userId);
-      const plan = paymentData.metadata.plan as keyof typeof SUBSCRIPTION_PLANS;
+    // Активируем подписку — статус подтверждён через API
+    const metadata = verifiedPayment.metadata || paymentData.metadata;
+    if (metadata?.userId && metadata?.plan) {
+      const userId = parseInt(metadata.userId);
+      const plan = metadata.plan as keyof typeof SUBSCRIPTION_PLANS;
 
       if (userId && SUBSCRIPTION_PLANS[plan]) {
         const durationDays = SUBSCRIPTION_PLANS[plan].duration;
