@@ -25,6 +25,7 @@ interface EnvConfig {
   // YooKassa
   YOOKASSA_SHOP_ID?: string;
   YOOKASSA_SECRET_KEY?: string;
+  YOOKASSA_WEBHOOK_SECRET?: string;
   
   // Frontend
   FRONTEND_URL: string;
@@ -53,6 +54,7 @@ class EnvValidator {
       OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
       YOOKASSA_SHOP_ID: process.env.YOOKASSA_SHOP_ID,
       YOOKASSA_SECRET_KEY: process.env.YOOKASSA_SECRET_KEY,
+      YOOKASSA_WEBHOOK_SECRET: process.env.YOOKASSA_WEBHOOK_SECRET,
       FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:3000',
       PORT: process.env.PORT || '3001',
       NODE_ENV: process.env.NODE_ENV || 'development',
@@ -168,6 +170,7 @@ class EnvValidator {
   private validateYooKassa(): void {
     const hasShopId = !!this.config.YOOKASSA_SHOP_ID;
     const hasSecretKey = !!this.config.YOOKASSA_SECRET_KEY;
+    const hasWebhookSecret = !!this.config.YOOKASSA_WEBHOOK_SECRET;
 
     if (hasShopId !== hasSecretKey) {
       this.errors.push(`❌ Both YOOKASSA_SHOP_ID and YOOKASSA_SECRET_KEY must be set together`);
@@ -179,6 +182,11 @@ class EnvValidator {
 
     if (hasSecretKey && this.config.YOOKASSA_SECRET_KEY === 'your_yookassa_secret_key') {
       this.errors.push(`❌ YOOKASSA_SECRET_KEY contains placeholder value`);
+    }
+
+    // При включённой YooKassa webhook-секрет обязателен для защиты от подделки
+    if (hasShopId && hasSecretKey && !hasWebhookSecret) {
+      this.errors.push(`❌ YOOKASSA_WEBHOOK_SECRET is required when YooKassa is configured`);
     }
   }
 
