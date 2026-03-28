@@ -9,12 +9,26 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import mongoose from 'mongoose';
+import rateLimit from 'express-rate-limit';
 import { connectDB } from './utils/database';
 import logger from './utils/logger';
 import { startBot } from './bot/index';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3001;
+
+// Trust proxy (Render, nginx, etc.)
+app.set('trust proxy', 1);
+
+// Global rate limit: 100 req / 15 min per IP
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 100,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { success: false, error: 'Too many requests, please try again later' },
+});
+app.use(globalLimiter);
 
 // Middleware
 app.use(helmet({

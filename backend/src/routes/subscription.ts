@@ -1,5 +1,6 @@
 import express from 'express';
 import { randomUUID } from 'crypto';
+import rateLimit from 'express-rate-limit';
 import { authenticateToken } from '../middleware/auth';
 import { verifyYooKassaWebhook } from '../middleware/verifyYooKassaSignature';
 import { checkSubscriptionStatus, activateSubscription } from '../utils/subscription';
@@ -9,9 +10,25 @@ import logger from '../utils/logger';
 
 const router = express.Router();
 
+const webhookLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 50,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { status: 'error', message: 'Too many webhook requests' },
+});
+
+const paymentLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 10,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { success: false, error: 'Too many payment requests, please try again later' },
+});
+
 // Webhook YooKassa — БЕЗ JWT (server-to-server), IP whitelist + проверка статуса через API
 // Идемпотентность: атомарный findOneAndUpdate по processed: false
-router.post('/webhook', verifyYooKassaWebhook, async (req, res) => {
+router.post('/webhook', webhookLimiter, verifyYooKassaWebhook, async (req, res) => {
   try {
     const { event, object: paymentData } = req.body;
 
@@ -116,7 +133,7 @@ router.get('/status', async (req: any, res) => {
 });
 
 // Создать платеж для подписки
-router.post('/create-payment', async (req: any, res) => {
+router.post('/create-payment', paymentLimiter, async (req: any, res) => {
   try {
     const userId = req.user.telegramId;
     const { plan } = req.body;
