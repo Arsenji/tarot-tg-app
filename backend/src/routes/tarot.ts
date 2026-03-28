@@ -39,7 +39,7 @@ router.get('/daily-card', async (req: any, res) => {
       adminIdString: adminTelegramId?.toString()
     });
     
-    // Проверяем подписку и лимит для бесплатных пользователей (1 раз в 24 часа)
+    // Проверяем подписку и лимит для бесплатных пользователей (1 раз в день, сброс в полночь MSK)
     const subscriptionStatus = await checkSubscriptionStatus(userId);
     const cooldowns = await getFreeUsageCooldowns(userId);
     const hasUsedToday = cooldowns.dailyAdviceMsRemaining > 0;
@@ -136,7 +136,7 @@ router.post('/daily-advice', async (req: any, res) => {
       adminIdString: adminTelegramId?.toString()
     });
     
-    // Проверяем подписку и лимит для бесплатных пользователей (1 раз в 24 часа)
+    // Проверяем подписку и лимит для бесплатных пользователей (1 раз в день, сброс в полночь MSK)
     const subscriptionStatus = await checkSubscriptionStatus(userId);
     const cooldowns = await getFreeUsageCooldowns(userId);
     const hasUsedToday = cooldowns.dailyAdviceMsRemaining > 0;
@@ -302,7 +302,7 @@ router.post('/three-cards', async (req: any, res) => {
       adminIdString: adminTelegramId?.toString()
     });
     
-    // Проверяем подписку и лимит для бесплатных пользователей (1 раз в 24 часа)
+    // Проверяем подписку и лимит для бесплатных пользователей (1 раз в день, сброс в полночь MSK)
     const subscriptionStatus = await checkSubscriptionStatus(userId);
     const hasUsedToday = await hasUsedThreeCardsToday(userId);
     
@@ -492,50 +492,13 @@ router.post('/yes-no', async (req: any, res) => {
     const subscriptionStatus = await checkSubscriptionStatus(userId);
     const hasUsedToday = await hasUsedFreeYesNo(userId);
     
-    // Дополнительное логирование для отладки
-    try {
-      const { User } = await import('../models/User');
-      const user = await User.findOne({ telegramId: userId });
-      const now = new Date();
-      const todayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-      
-      let lastDateUTC = null;
-      let isSameDay = false;
-      let isFuture = false;
-      
-      if (user?.lastYesNoDate) {
-        const lastDate = new Date(user.lastYesNoDate);
-        lastDateUTC = new Date(Date.UTC(lastDate.getUTCFullYear(), lastDate.getUTCMonth(), lastDate.getUTCDate()));
-        isSameDay = todayUTC.getTime() === lastDateUTC.getTime();
-        isFuture = lastDateUTC.getTime() > todayUTC.getTime();
-      }
-      
-      logger.info('Yes/No subscription check - detailed', {
-        userId,
-        hasSubscription: subscriptionStatus.hasSubscription,
-        isAdmin,
-        hasUsedToday,
-        willAllow: subscriptionStatus.hasSubscription || isAdmin || !hasUsedToday,
-        userExists: !!user,
-        lastYesNoDate: user?.lastYesNoDate?.toISOString() || null,
-        currentDate: now.toISOString(),
-        todayUTC: todayUTC.toISOString(),
-        lastDateUTC: lastDateUTC?.toISOString() || null,
-        isSameDay,
-        isFuture,
-        timeDifference: lastDateUTC ? (todayUTC.getTime() - lastDateUTC.getTime()) / (1000 * 60 * 60 * 24) : null
-      });
-    } catch (error) {
-      logger.error('Error getting user details for Yes/No check', { error, userId });
-    }
-    
     logger.info('Yes/No subscription check', {
       userId,
       hasSubscription: subscriptionStatus.hasSubscription,
       isAdmin,
-      hasUsedToday, // VERSION: 2026-01-12 - исправлено: было hasUsedFree, теперь hasUsedToday
+      hasUsedToday,
       willAllow: subscriptionStatus.hasSubscription || isAdmin || !hasUsedToday,
-      codeVersion: '2026-01-12-v3' // Маркер версии для проверки деплоя
+      codeVersion: '2026-01-21-daily-reset'
     });
     
     if (!subscriptionStatus.hasSubscription && !isAdmin && hasUsedToday) {
@@ -1070,29 +1033,7 @@ router.get('/subscription-status', async (req: any, res) => {
         u?.subscriptionExpiresAt &&
         new Date(u.subscriptionExpiresAt).getTime() > now.getTime());
 
-    const COOLDOWN_MS = 24 * 60 * 60 * 1000;
-    const msRemaining = (last: any) => {
-      if (!last) return 0;
-      const lastTime = new Date(last).getTime();
-      const nowTime = now.getTime();
-      if (lastTime > nowTime) return 0;
-      const elapsed = nowTime - lastTime;
-      if (elapsed >= COOLDOWN_MS) return 0;
-      return COOLDOWN_MS - elapsed;
-    };
-    const hoursRemaining = (ms: number) => (ms <= 0 ? 0 : Math.ceil(ms / (60 * 60 * 1000)));
-
-    const cooldowns = {
-      dailyAdviceMsRemaining: msRemaining(u?.lastDailyAdviceDate),
-      yesNoMsRemaining: msRemaining(u?.lastYesNoDate),
-      threeCardsMsRemaining: msRemaining(u?.lastThreeCardsDate),
-      dailyAdviceHoursRemaining: 0,
-      yesNoHoursRemaining: 0,
-      threeCardsHoursRemaining: 0,
-    };
-    cooldowns.dailyAdviceHoursRemaining = hoursRemaining(cooldowns.dailyAdviceMsRemaining);
-    cooldowns.yesNoHoursRemaining = hoursRemaining(cooldowns.yesNoMsRemaining);
-    cooldowns.threeCardsHoursRemaining = hoursRemaining(cooldowns.threeCardsMsRemaining);
+    const cooldowns = await getFreeUsageCooldowns(userId);
 
     const hasUsedDailyAdviceTodayValue = cooldowns.dailyAdviceMsRemaining > 0;
     const hasUsedYesNoToday = cooldowns.yesNoMsRemaining > 0;
@@ -1106,12 +1047,12 @@ router.get('/subscription-status', async (req: any, res) => {
       hasUsedYesNoToday,
       hasUsedThreeCardsToday: hasUsedThreeCardsTodayValue,
       cooldowns,
-      codeVersion: '2026-01-12-v3' // Маркер версии для проверки деплоя
+      codeVersion: '2026-01-21-daily-reset'
     });
     
     // Формируем ответ в формате, который ожидает фронтенд
     // Администратор всегда имеет доступ ко всем раскладам
-    // Для бесплатных пользователей: 1 раз в 24 часа для каждого типа (независимо)
+    // Для бесплатных пользователей: 1 раз в день (сброс в полночь по Москве)
     const remainingDailyAdvice = isAdmin ? -1 : (hasSubscription ? -1 : (hasUsedDailyAdviceTodayValue ? 0 : 1));
     const remainingYesNo = isAdmin ? -1 : (hasSubscription ? -1 : (hasUsedYesNoToday ? 0 : 1));
     const remainingThreeCards = isAdmin ? -1 : (hasSubscription ? -1 : (hasUsedThreeCardsTodayValue ? 0 : 1));

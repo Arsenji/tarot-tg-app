@@ -8,19 +8,46 @@ export interface SubscriptionStatus {
   daysRemaining?: number;
 }
 
-const COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 часа
+const TIMEZONE = 'Europe/Moscow';
+
+/**
+ * Получить начало текущего дня в Moscow timezone (полночь).
+ */
+function getMoscowDayStart(date: Date): Date {
+  const moscowStr = date.toLocaleDateString('en-CA', { timeZone: TIMEZONE }); // YYYY-MM-DD
+  // Парсим как Moscow midnight → UTC
+  const [year, month, day] = moscowStr.split('-').map(Number);
+  // Создаём дату полуночи в Moscow через offset
+  const moscowMidnight = new Date(Date.UTC(year, month - 1, day));
+  // Moscow = UTC+3
+  moscowMidnight.setUTCHours(moscowMidnight.getUTCHours() - 3);
+  return moscowMidnight;
+}
+
+/**
+ * Проверяет, был ли lastDate в тот же календарный день (Moscow TZ), что и now.
+ * Если lastDate сегодня — расклад уже использован. Иначе — доступен.
+ */
+function isUsedToday(lastDate: Date | null | undefined, now: Date): boolean {
+  if (!lastDate) return false;
+  const lastTime = lastDate.getTime();
+  if (lastTime > now.getTime()) return false; // данные из будущего — не блокируем
+  const todayStart = getMoscowDayStart(now);
+  return lastTime >= todayStart.getTime();
+}
+
+/**
+ * Миллисекунды до начала следующего дня (Moscow TZ).
+ */
+function getMsUntilMoscowMidnight(now: Date): number {
+  const todayStart = getMoscowDayStart(now);
+  const tomorrowStart = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
+  return Math.max(0, tomorrowStart.getTime() - now.getTime());
+}
 
 function getCooldownMsRemaining(lastDate: Date | null | undefined, now: Date): number {
-  if (!lastDate) return 0;
-  const lastTime = lastDate.getTime();
-  const nowTime = now.getTime();
-
-  // Если дата в будущем (кривые данные/часы) — не блокируем
-  if (lastTime > nowTime) return 0;
-
-  const elapsed = nowTime - lastTime;
-  if (elapsed >= COOLDOWN_MS) return 0;
-  return COOLDOWN_MS - elapsed;
+  if (!isUsedToday(lastDate, now)) return 0;
+  return getMsUntilMoscowMidnight(now);
 }
 
 function getCooldownHoursRemaining(msRemaining: number): number {
@@ -128,35 +155,19 @@ export async function deactivateSubscription(telegramId: number): Promise<boolea
 export async function hasUsedFreeYesNo(telegramId: number): Promise<boolean> {
   try {
     const user = await User.findOne({ telegramId });
-    if (!user) {
-      logger.info('hasUsedFreeYesNo: user not found', { telegramId });
-      return false;
-    }
-    
-    if (!user.lastYesNoDate) {
-      logger.info('hasUsedFreeYesNo: no lastYesNoDate', { 
-        telegramId, 
-        hasUser: true,
-        lastYesNoDate: null
-      });
-      return false;
-    }
+    if (!user) return false;
     
     const now = new Date();
-    const lastDate = new Date(user.lastYesNoDate);
-    const msRemaining = getCooldownMsRemaining(lastDate, now);
-    const willReturn = msRemaining > 0;
+    const used = isUsedToday(user.lastYesNoDate, now);
     
     logger.info('hasUsedFreeYesNo check', { 
       telegramId,
       now: now.toISOString(),
-      lastYesNoDateRaw: user.lastYesNoDate?.toISOString(),
-      msRemaining,
-      hoursRemaining: getCooldownHoursRemaining(msRemaining),
-      willReturn
+      lastYesNoDate: user.lastYesNoDate?.toISOString() || null,
+      usedToday: used,
     });
     
-    return willReturn;
+    return used;
   } catch (error) {
     logger.error('Error checking free Yes/No usage', { error, telegramId });
     return false;
@@ -194,35 +205,19 @@ export async function markFreeYesNoUsed(telegramId: number): Promise<boolean> {
 export async function hasUsedDailyAdviceToday(telegramId: number): Promise<boolean> {
   try {
     const user = await User.findOne({ telegramId });
-    if (!user) {
-      logger.info('hasUsedDailyAdviceToday: user not found', { telegramId });
-      return false;
-    }
-    
-    if (!user.lastDailyAdviceDate) {
-      logger.info('hasUsedDailyAdviceToday: no lastDailyAdviceDate', { 
-        telegramId, 
-        hasUser: true,
-        lastDailyAdviceDate: null
-      });
-      return false;
-    }
+    if (!user) return false;
     
     const now = new Date();
-    const lastDate = new Date(user.lastDailyAdviceDate);
-    const msRemaining = getCooldownMsRemaining(lastDate, now);
-    const willReturn = msRemaining > 0;
+    const used = isUsedToday(user.lastDailyAdviceDate, now);
     
     logger.info('hasUsedDailyAdviceToday check', { 
       telegramId,
       now: now.toISOString(),
-      lastDailyAdviceDateRaw: user.lastDailyAdviceDate?.toISOString(),
-      msRemaining,
-      hoursRemaining: getCooldownHoursRemaining(msRemaining),
-      willReturn
+      lastDailyAdviceDate: user.lastDailyAdviceDate?.toISOString() || null,
+      usedToday: used,
     });
     
-    return willReturn;
+    return used;
   } catch (error) {
     logger.error('Error checking daily advice usage', { error, telegramId });
     return false;
@@ -254,35 +249,19 @@ export async function markDailyAdviceUsed(telegramId: number): Promise<boolean> 
 export async function hasUsedThreeCardsToday(telegramId: number): Promise<boolean> {
   try {
     const user = await User.findOne({ telegramId });
-    if (!user) {
-      logger.info('hasUsedThreeCardsToday: user not found', { telegramId });
-      return false;
-    }
-    
-    if (!user.lastThreeCardsDate) {
-      logger.info('hasUsedThreeCardsToday: no lastThreeCardsDate', { 
-        telegramId, 
-        hasUser: true,
-        lastThreeCardsDate: null
-      });
-      return false;
-    }
+    if (!user) return false;
     
     const now = new Date();
-    const lastDate = new Date(user.lastThreeCardsDate);
-    const msRemaining = getCooldownMsRemaining(lastDate, now);
-    const willReturn = msRemaining > 0;
+    const used = isUsedToday(user.lastThreeCardsDate, now);
     
     logger.info('hasUsedThreeCardsToday check', { 
       telegramId,
       now: now.toISOString(),
-      lastThreeCardsDateRaw: user.lastThreeCardsDate?.toISOString(),
-      msRemaining,
-      hoursRemaining: getCooldownHoursRemaining(msRemaining),
-      willReturn
+      lastThreeCardsDate: user.lastThreeCardsDate?.toISOString() || null,
+      usedToday: used,
     });
     
-    return willReturn;
+    return used;
   } catch (error) {
     logger.error('Error checking three cards usage', { error, telegramId });
     return false;
