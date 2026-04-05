@@ -13,6 +13,7 @@ import rateLimit from 'express-rate-limit';
 import { connectDB } from './utils/database';
 import logger from './utils/logger';
 import { startBot } from './bot/index';
+import { openAIService } from './services/openai';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3001;
@@ -119,6 +120,14 @@ app.get('/health', (req, res) => {
   });
 });
 
+// GPT availability status
+app.get('/api/gpt-status', (_req, res) => {
+  res.json({
+    available: openAIService.gptAvailable,
+    lastCheckAt: openAIService.lastCheckAt?.toISOString() || null,
+  });
+});
+
 // API маршруты
 import tarotRoutes from './routes/tarot';
 import subscriptionRoutes from './routes/subscription';
@@ -165,9 +174,12 @@ const startServer = async () => {
       logger.info(`HTTP server started on port ${PORT}`, { port: PORT, environment: process.env.NODE_ENV });
     });
     
+    // Проверяем доступность OpenAI и запускаем периодический мониторинг
+    openAIService.startHealthCheck().catch((error) => {
+      logger.error('Failed to start GPT health check', { error });
+    });
+
     // Запускаем Telegram бота ПОСЛЕ сервера
-    // bot.launch() - блокирующая операция (long polling), но сервер уже запущен
-    // Важно: запускаем бота в отдельном промиссе, чтобы ошибки бота не завершали сервер
     startBot().catch((error) => {
       logger.error('Failed to start bot, but server is running', { error });
       // НЕ завершаем процесс - сервер должен работать даже без бота

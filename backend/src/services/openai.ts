@@ -7,6 +7,7 @@ export interface OpenAIResponse {
   success: boolean;
   interpretation?: string;
   error?: string;
+  fallback?: boolean;
 }
 
 export interface CardInterpretationRequest {
@@ -30,6 +31,11 @@ export interface ReadingRequest {
 class OpenAIService {
   private openai: OpenAI | null = null;
   private isConfigured = false;
+  private _gptAvailable = false;
+  private _lastCheckAt: Date | null = null;
+  private _checkInterval: ReturnType<typeof setInterval> | null = null;
+
+  private static readonly CHECK_INTERVAL_MS = 5 * 60 * 1000; // 5 минут
 
   constructor() {
     this.initialize();
@@ -54,16 +60,75 @@ class OpenAIService {
     }
   }
 
+  get gptAvailable(): boolean {
+    return this._gptAvailable;
+  }
+
+  get lastCheckAt(): Date | null {
+    return this._lastCheckAt;
+  }
+
   async isAvailable(): Promise<boolean> {
-    return this.isConfigured && this.openai !== null;
+    return this.isConfigured && this.openai !== null && this._gptAvailable;
+  }
+
+  /**
+   * Проверяет реальную доступность OpenAI API коротким запросом.
+   */
+  async checkGptConnection(): Promise<boolean> {
+    if (!this.isConfigured || !this.openai) {
+      this._gptAvailable = false;
+      this._lastCheckAt = new Date();
+      logger.warn('GPT check skipped: not configured');
+      return false;
+    }
+
+    try {
+      await this.openai.chat.completions.create({
+        model: 'gpt-3.5-turbo',
+        messages: [{ role: 'user', content: 'ping' }],
+        max_tokens: 1,
+      });
+      this._gptAvailable = true;
+      this._lastCheckAt = new Date();
+      logger.info('GPT health check passed');
+      return true;
+    } catch (error: any) {
+      this._gptAvailable = false;
+      this._lastCheckAt = new Date();
+      logger.error('GPT health check failed', {
+        error: error.message || error,
+        status: error.status,
+        code: error.code,
+      });
+      return false;
+    }
+  }
+
+  /**
+   * Запускает первоначальную проверку и периодический опрос.
+   */
+  async startHealthCheck(): Promise<void> {
+    await this.checkGptConnection();
+
+    if (this._checkInterval) clearInterval(this._checkInterval);
+    this._checkInterval = setInterval(() => {
+      this.checkGptConnection().catch(() => {});
+    }, OpenAIService.CHECK_INTERVAL_MS);
+
+    logger.info('GPT periodic health check started', {
+      intervalMs: OpenAIService.CHECK_INTERVAL_MS,
+      initialStatus: this._gptAvailable,
+    });
   }
 
   async getCardInterpretation(request: CardInterpretationRequest): Promise<OpenAIResponse> {
     if (!this.isConfigured || !this.openai) {
-      return {
-        success: false,
-        error: 'OpenAI service not configured'
-      };
+      return { success: false, error: 'OpenAI service not configured', fallback: true };
+    }
+
+    if (!this._gptAvailable) {
+      return { success: false, error: 'AI временно недоступен', fallback: true };
     }
 
     try {
@@ -88,31 +153,24 @@ class OpenAIService {
       const interpretation = response.choices[0]?.message?.content?.trim();
       
       if (!interpretation) {
-        return {
-          success: false,
-          error: 'Empty response from OpenAI'
-        };
+        return { success: false, error: 'Empty response from OpenAI' };
       }
 
-      return {
-        success: true,
-        interpretation
-      };
+      return { success: true, interpretation };
     } catch (error) {
-      logger.error('OpenAI card interpretation error', { error, request });
-      return {
-        success: false,
-        error: 'Failed to get card interpretation'
-      };
+      this._gptAvailable = false;
+      logger.error('OpenAI card interpretation error — marking GPT unavailable', { error, request });
+      return { success: false, error: 'AI временно недоступен', fallback: true };
     }
   }
 
   async getReadingInterpretation(request: ReadingRequest): Promise<OpenAIResponse> {
     if (!this.isConfigured || !this.openai) {
-      return {
-        success: false,
-        error: 'OpenAI service not configured'
-      };
+      return { success: false, error: 'OpenAI service not configured', fallback: true };
+    }
+
+    if (!this._gptAvailable) {
+      return { success: false, error: 'AI временно недоступен', fallback: true };
     }
 
     try {
@@ -137,22 +195,14 @@ class OpenAIService {
       const interpretation = response.choices[0]?.message?.content?.trim();
       
       if (!interpretation) {
-        return {
-          success: false,
-          error: 'Empty response from OpenAI'
-        };
+        return { success: false, error: 'Empty response from OpenAI' };
       }
 
-      return {
-        success: true,
-        interpretation
-      };
+      return { success: true, interpretation };
     } catch (error) {
-      logger.error('OpenAI reading interpretation error', { error, request });
-      return {
-        success: false,
-        error: 'Failed to get reading interpretation'
-      };
+      this._gptAvailable = false;
+      logger.error('OpenAI reading interpretation error — marking GPT unavailable', { error, request });
+      return { success: false, error: 'AI временно недоступен', fallback: true };
     }
   }
 
@@ -291,10 +341,11 @@ class OpenAIService {
     readingType: string
   ): Promise<OpenAIResponse> {
     if (!this.isConfigured || !this.openai) {
-      return {
-        success: false,
-        error: 'OpenAI service not configured'
-      };
+      return { success: false, error: 'OpenAI service not configured', fallback: true };
+    }
+
+    if (!this._gptAvailable) {
+      return { success: false, error: 'AI временно недоступен', fallback: true };
     }
 
     try {
@@ -354,11 +405,9 @@ class OpenAIService {
         interpretation
       };
     } catch (error) {
-      logger.error('OpenAI clarifying answer error', { error, clarifyingQuestion, originalQuestion });
-      return {
-        success: false,
-        error: 'Failed to get clarifying answer'
-      };
+      this._gptAvailable = false;
+      logger.error('OpenAI clarifying answer error — marking GPT unavailable', { error, clarifyingQuestion, originalQuestion });
+      return { success: false, error: 'AI временно недоступен', fallback: true };
     }
   }
 

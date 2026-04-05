@@ -91,13 +91,14 @@ router.get('/daily-card', async (req: any, res) => {
     });
 
     if (!interpretation.success || !interpretation.interpretation) {
-      return res.status(500).json({
+      const status = interpretation.fallback ? 503 : 500;
+      return res.status(status).json({
         success: false,
-        error: 'Failed to get card interpretation'
+        error: interpretation.error || 'Failed to get card interpretation',
+        fallback: interpretation.fallback || false,
       });
     }
 
-    // Отмечаем использование Daily Advice для бесплатных пользователей ПОСЛЕ успешного получения интерпретации
     if (!subscriptionStatus.hasSubscription && !isAdmin) {
       await markDailyAdviceUsed(userId);
       logger.info('Daily Advice marked as used for free user', { telegramId: userId });
@@ -106,7 +107,7 @@ router.get('/daily-card', async (req: any, res) => {
     res.json({
       success: true,
       card: {
-        name: russianCardName, // Русское название
+        name: russianCardName,
         interpretation: interpretation.interpretation
       }
     });
@@ -188,9 +189,11 @@ router.post('/daily-advice', async (req: any, res) => {
     });
 
     if (!interpretation.success || !interpretation.interpretation) {
-      return res.status(500).json({
+      const status = interpretation.fallback ? 503 : 500;
+      return res.status(status).json({
         success: false,
-        error: 'Failed to get card interpretation'
+        error: interpretation.error || 'Failed to get card interpretation',
+        fallback: interpretation.fallback || false,
       });
     }
     const imagePath = getCardImagePath(randomCard, isReversed);
@@ -384,9 +387,11 @@ router.post('/three-cards', async (req: any, res) => {
     });
 
     if (!interpretation.success) {
-      return res.status(500).json({
+      const status = interpretation.fallback ? 503 : 500;
+      return res.status(status).json({
         success: false,
-        error: 'Failed to get reading interpretation'
+        error: interpretation.error || 'Failed to get reading interpretation',
+        fallback: interpretation.fallback || false,
       });
     }
 
@@ -533,9 +538,11 @@ router.post('/yes-no', async (req: any, res) => {
     });
 
     if (!interpretation.success || !interpretation.interpretation) {
-      return res.status(500).json({
+      const status = interpretation.fallback ? 503 : 500;
+      return res.status(status).json({
         success: false,
-        error: 'Failed to get Yes/No interpretation'
+        error: interpretation.error || 'Failed to get Yes/No interpretation',
+        fallback: interpretation.fallback || false,
       });
     }
 
@@ -1150,9 +1157,11 @@ const handleClarifyingQuestion = async (req: any, res: any) => {
     );
 
     if (!answer.success || !answer.interpretation) {
-      return res.status(500).json({
+      const status = answer.fallback ? 503 : 500;
+      return res.status(status).json({
         success: false,
-        error: 'Failed to get clarifying answer'
+        error: answer.error || 'Failed to get clarifying answer',
+        fallback: answer.fallback || false,
       });
     }
 
@@ -1224,77 +1233,60 @@ const handleClarifyingQuestion = async (req: any, res: any) => {
 router.post('/clarifying-question', handleClarifyingQuestion);
 router.post('/clarifying-answer', handleClarifyingQuestion);
 
-// Тестовый endpoint для диагностики истории
+// Диагностика истории — только для admin, отключён в production
 router.get('/history-debug', async (req: any, res) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(404).json({ success: false, error: 'Route not found' });
+  }
+
+  const userId = req.user?.telegramId;
+  if (!userId) {
+    return res.status(401).json({ success: false, error: 'Unauthorized' });
+  }
+
+  const adminTelegramId = process.env.ADMIN_TELEGRAM_ID;
+  if (!adminTelegramId || userId.toString() !== adminTelegramId.toString()) {
+    return res.status(403).json({ success: false, error: 'Forbidden' });
+  }
+
   try {
-    const userId = req.user.telegramId;
     const userObjectId = req.user.userId;
-    
-    // Получаем все записи без фильтра
-    const allReadings = await TarotReading.find({})
-      .limit(10)
-      .select('userId telegramId readingType createdAt')
-      .lean();
-    
-    // Проверяем по telegramId
-    const byTelegramId = await TarotReading.find({ telegramId: userId })
-      .select('_id userId telegramId readingType createdAt')
-      .lean();
-    
-    // Проверяем по userId
-    const byUserId = await TarotReading.find({ userId: userObjectId })
-      .select('_id userId telegramId readingType createdAt')
-      .lean();
-    
-    // Проверяем общее количество
+
     const totalCount = await TarotReading.countDocuments({});
     const countByTelegramId = await TarotReading.countDocuments({ telegramId: userId });
     const countByUserId = await TarotReading.countDocuments({ userId: userObjectId });
-    
+
+    const byTelegramId = await TarotReading.find({ telegramId: userId })
+      .sort({ createdAt: -1 })
+      .limit(100)
+      .select('_id userId telegramId readingType createdAt')
+      .lean();
+
     res.json({
       success: true,
       debug: {
         currentUser: {
           userId: userObjectId,
           telegramId: userId,
-          userIdType: typeof userObjectId,
-          telegramIdType: typeof userId
         },
         database: {
           totalReadings: totalCount,
           countByTelegramId,
-          countByUserId
+          countByUserId,
         },
-        sampleReadings: allReadings.map((r: any) => ({
-          _id: r._id.toString(),
-          userId: r.userId,
-          telegramId: r.telegramId,
-          readingType: r.readingType,
-          createdAt: r.createdAt
-        })),
         readingsByTelegramId: byTelegramId.map((r: any) => ({
           _id: r._id.toString(),
           userId: r.userId,
           telegramId: r.telegramId,
           readingType: r.readingType,
-          createdAt: r.createdAt
+          createdAt: r.createdAt,
         })),
-        readingsByUserId: byUserId.map((r: any) => ({
-          _id: r._id.toString(),
-          userId: r.userId,
-          telegramId: r.telegramId,
-          readingType: r.readingType,
-          createdAt: r.createdAt
-        }))
-      }
+      },
     });
   } catch (error) {
-    logger.error('History debug error', { error, userId: req.user?.telegramId });
-    res.status(500).json({
-      success: false,
-      error: 'Internal server error'
-    });
+    logger.error('History debug error', { error, userId });
+    res.status(500).json({ success: false, error: 'Internal server error' });
   }
-}); // Для обратной совместимости со старым кодом
+});
 
 export default router;

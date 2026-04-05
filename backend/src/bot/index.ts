@@ -734,131 +734,20 @@ const startBot = async () => {
     bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
     logger.info('Bot instance created');
 
-    // Инициализируем обработчики
+    // Регистрируем все обработчики команд и сообщений
     initializeBot();
-    logger.info('Bot handlers initialized');
+    logger.info('Bot handlers registered');
 
-    // Регистрируем команды бота (чтобы они отображались в меню)
-    try {
-      await bot.telegram.setMyCommands([
-        { command: 'start', description: 'Начать работу с ботом' },
-        { command: 'help', description: 'Получить помощь' },
-        { command: 'subscription', description: 'Информация о подписке' }
-      ]);
-      logger.info('Bot commands registered successfully');
-    } catch (error) {
-      logger.error('Failed to register bot commands', { error });
-      // Не блокируем запуск бота, если команды не зарегистрировались
-    }
-    
-    // Проверяем, что обработчики зарегистрированы
-    logger.info('Bot ready to launch', { 
-      hasStartHandler: !!bot,
-      isBotRunning 
-    });
+    // Запускаем long-polling
+    await bot.launch();
+    isBotRunning = true;
+    logger.info('Bot started successfully');
 
-    // Проверяем, не запущен ли бот уже перед launch
-    if (isBotRunning) {
-      logger.warn('Bot is already running, skipping launch');
-      return;
-    }
-
-    // Проверяем режим работы бота (webhook или getUpdates)
-    const useWebhook = process.env.TELEGRAM_USE_WEBHOOK === 'true';
-    const webhookUrl = process.env.WEBHOOK_URL || process.env.TELEGRAM_WEBHOOK_URL;
-
-    if (useWebhook && webhookUrl) {
-      // Режим webhook - отключаем getUpdates и устанавливаем webhook
-      logger.info('Starting bot in webhook mode');
-      
-      try {
-        // Удаляем существующий webhook, если есть
-        await bot.telegram.deleteWebhook({ drop_pending_updates: true });
-        logger.info('Deleted existing webhook');
-        
-        // Устанавливаем webhook автоматически из env
-        await bot.telegram.setWebhook(webhookUrl, { drop_pending_updates: true });
-        logger.info(`Webhook set to: ${webhookUrl}`);
-        
-        isBotRunning = true;
-        logger.info('🤖 Telegram Bot started in webhook mode');
-      } catch (error) {
-        logger.error('Failed to set webhook', { error });
-        throw error;
-      }
-    } else {
-      // Режим getUpdates (long polling) - отключаем webhook и запускаем polling
-      logger.info('Starting bot in getUpdates (long polling) mode');
-      
-      try {
-        // Удаляем webhook, если он был установлен
-        await bot.telegram.deleteWebhook({ drop_pending_updates: true });
-        logger.info('Deleted webhook to use getUpdates mode');
-        
-        // Добавляем задержку перед запуском для предотвращения конфликтов
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // Запускаем long polling
-        await bot.launch();
-        isBotRunning = true;
-        logger.info('🤖 Telegram Bot started in getUpdates mode');
-        
-        // Проверяем, что бот действительно работает
-        try {
-          const botInfo = await bot.telegram.getMe();
-          logger.info('Bot info retrieved', { username: botInfo.username, id: botInfo.id });
-        } catch (infoError) {
-          logger.error('Failed to get bot info', { error: infoError });
-        }
-      } catch (error: any) {
-        // Проверяем на конфликт 409
-        if (error?.response?.error_code === 409) {
-          logger.warn('Bot conflict detected - another instance is using getUpdates');
-          logger.warn('Trying to delete webhook and retry...');
-          
-          try {
-            await bot.telegram.deleteWebhook({ drop_pending_updates: true });
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            await bot.launch();
-            isBotRunning = true;
-            logger.info('🤖 Telegram Bot started successfully after resolving conflict');
-          } catch (retryError) {
-            logger.error('Failed to start bot after conflict resolution', { error: retryError });
-            throw retryError;
-          }
-        } else {
-          throw error;
-        }
-      }
-    }
-    
-    // Graceful stop
-    process.once('SIGINT', () => {
-      if (isBotRunning) {
-        bot.stop('SIGINT');
-        isBotRunning = false;
-      }
-    });
-    process.once('SIGTERM', () => {
-      if (isBotRunning) {
-        bot.stop('SIGTERM');
-        isBotRunning = false;
-      }
-    });
-  } catch (error: any) {
-    logger.error('Failed to start bot', { error });
-    isBotRunning = false;
-    
-    // Если это ошибка конфликта 409, логируем и продолжаем без бота
-    if (error?.response?.error_code === 409) {
-      logger.warn('Bot conflict detected - another instance is running');
-      logger.warn('Continuing without Telegram Bot - API will work normally');
-      return;
-    }
-    
-    // Для других ошибок тоже не завершаем процесс
-    logger.warn('Bot startup failed, but continuing without it');
-    return;
+    // Graceful shutdown
+    process.once('SIGINT', () => bot.stop('SIGINT'));
+    process.once('SIGTERM', () => bot.stop('SIGTERM'));
+  } catch (error) {
+    logger.error('Bot startup failed, continuing without it', { error });
   }
 };
 
