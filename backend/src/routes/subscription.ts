@@ -1,12 +1,19 @@
 import express from 'express';
 import { randomUUID } from 'crypto';
 import rateLimit from 'express-rate-limit';
+import { PostHog } from 'posthog-node';
 import { authenticateToken } from '../middleware/auth';
 import { verifyYooKassaWebhook } from '../middleware/verifyYooKassaSignature';
 import { checkSubscriptionStatus, activateSubscription } from '../utils/subscription';
 import { YooKassaService, SUBSCRIPTION_PLANS } from '../services/yookassa';
 import { Payment } from '../models/Payment';
 import logger from '../utils/logger';
+
+const posthog = new PostHog('phc_pA7Aai2zies44X8G3ebVUTQii7DmCRxt26Cww33HPsN3', {
+  host: 'https://app.posthog.com',
+  flushAt: 1,
+  flushInterval: 0,
+});
 
 const router = express.Router();
 
@@ -92,6 +99,17 @@ router.post('/webhook', webhookLimiter, verifyYooKassaWebhook, async (req, res) 
             plan,
             paymentId,
             amount: paymentData.amount?.value,
+          });
+
+          posthog.capture({
+            distinctId: String(userId),
+            event: 'subscription_paid',
+            properties: {
+              amount: paymentData.amount?.value,
+              currency: paymentData.amount?.currency || 'RUB',
+              plan,
+              paymentId,
+            },
           });
         } else {
           logger.error('Failed to activate subscription via webhook', {
