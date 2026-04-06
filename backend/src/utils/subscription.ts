@@ -311,6 +311,9 @@ export async function getFreeUsageCooldowns(telegramId: number): Promise<{
 /**
  * Отмечает, что пользователь использовал Three Cards сегодня
  */
+// Re-export pure helpers for unit testing
+export { getMoscowDayStart, isUsedToday, getMsUntilMoscowMidnight, getCooldownMsRemaining, getCooldownHoursRemaining };
+
 export async function markThreeCardsUsed(telegramId: number): Promise<boolean> {
   try {
     const now = new Date();
