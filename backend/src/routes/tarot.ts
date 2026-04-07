@@ -19,6 +19,55 @@ import { getRussianCardName, getCardImagePath } from '../utils/cardTranslations'
 
 const router = express.Router();
 
+/** Fresh subscription snapshot (same shape as GET /subscription-status). Uses DB for cooldowns after mark*Used. */
+async function buildSubscriptionInfoForRequest(req: any): Promise<Record<string, unknown> | null> {
+  try {
+    const userId = req.user?.telegramId;
+    if (userId == null) return null;
+    const adminTelegramId = process.env.ADMIN_TELEGRAM_ID;
+    const isAdmin = !!(adminTelegramId && userId.toString() === adminTelegramId.toString());
+    let u = req.userRecord;
+    if (!u) {
+      const { User } = await import('../models/User');
+      u = await User.findOne({ telegramId: userId })
+        .select('telegramId subscriptionStatus subscriptionExpiresAt lastDailyAdviceDate lastYesNoDate lastThreeCardsDate')
+        .lean();
+      req.userRecord = u;
+    }
+    if (!u) return null;
+
+    const now = new Date();
+    const hasSubscription =
+      isAdmin ||
+      (u?.subscriptionStatus === 1 &&
+        u?.subscriptionExpiresAt &&
+        new Date(u.subscriptionExpiresAt).getTime() > now.getTime());
+
+    const cooldowns = await getFreeUsageCooldowns(userId);
+    const hasUsedDailyAdviceTodayValue = cooldowns.dailyAdviceMsRemaining > 0;
+    const hasUsedYesNoToday = cooldowns.yesNoMsRemaining > 0;
+    const hasUsedThreeCardsTodayValue = cooldowns.threeCardsMsRemaining > 0;
+
+    const remainingDailyAdvice = isAdmin ? -1 : (hasSubscription ? -1 : (hasUsedDailyAdviceTodayValue ? 0 : 1));
+    const remainingYesNo = isAdmin ? -1 : (hasSubscription ? -1 : (hasUsedYesNoToday ? 0 : 1));
+    const remainingThreeCards = isAdmin ? -1 : (hasSubscription ? -1 : (hasUsedThreeCardsTodayValue ? 0 : 1));
+
+    return {
+      hasSubscription,
+      canUseDailyAdvice: hasSubscription || isAdmin || remainingDailyAdvice > 0,
+      canUseYesNo: hasSubscription || isAdmin || remainingYesNo > 0,
+      canUseThreeCards: hasSubscription || isAdmin || remainingThreeCards > 0,
+      remainingDailyAdvice,
+      remainingYesNo,
+      remainingThreeCards,
+      cooldowns,
+    };
+  } catch (e) {
+    logger.error('buildSubscriptionInfoForRequest failed', { error: e });
+    return null;
+  }
+}
+
 // Middleware для всех маршрутов
 router.use(authenticateToken);
 
@@ -258,6 +307,7 @@ router.post('/daily-advice', async (req: any, res) => {
       }
     }
 
+    const subscriptionInfo = await buildSubscriptionInfoForRequest(req);
     // Формируем ответ в формате, который ожидает фронтенд
     res.json({
       success: true,
@@ -276,7 +326,8 @@ router.post('/daily-advice', async (req: any, res) => {
         interpretation: interpretation.interpretation,
         advice: interpretation.interpretation, // Для совместимости с фронтендом
         category: 'major'
-      }
+      },
+      ...(subscriptionInfo ? { subscriptionInfo } : {}),
     });
   } catch (error) {
     logger.error('Daily advice error', { error, userId: req.user?.telegramId });
@@ -451,13 +502,15 @@ router.post('/three-cards', async (req: any, res) => {
       }
     }
 
+    const subscriptionInfoThree = await buildSubscriptionInfoForRequest(req);
     res.json({
       success: true,
       data: {
         cards: selectedCards, // Русские названия для фронтенда
         interpretation: interpretation.interpretation,
         category: 'major'
-      }
+      },
+      ...(subscriptionInfoThree ? { subscriptionInfo: subscriptionInfoThree } : {}),
     });
   } catch (error) {
     logger.error('Three cards error', { error, userId: req.user?.telegramId });
@@ -633,6 +686,7 @@ router.post('/yes-no', async (req: any, res) => {
       }
     }
 
+    const subscriptionInfoYesNo = await buildSubscriptionInfoForRequest(req);
     // Формируем ответ в формате, который ожидает фронтенд
     res.json({
       success: true,
@@ -651,7 +705,8 @@ router.post('/yes-no', async (req: any, res) => {
         answer: answer,
         interpretation: interpretationText,
         category: 'major'
-      }
+      },
+      ...(subscriptionInfoYesNo ? { subscriptionInfo: subscriptionInfoYesNo } : {}),
     });
   } catch (error) {
     logger.error('Yes/No error', { error, userId: req.user?.telegramId });
@@ -999,105 +1054,23 @@ router.get('/subscription-status', async (req: any, res) => {
   try {
     const start = Date.now();
     const userId = req.user.telegramId;
-    
-    // Проверяем, является ли пользователь администратором (безлимитный доступ)
-    const adminTelegramId = process.env.ADMIN_TELEGRAM_ID;
-    const isAdmin = adminTelegramId && userId.toString() === adminTelegramId.toString();
-    
-    // Логируем для отладки
-    logger.info('Subscription status check', {
-      userId,
-      adminTelegramId,
-      isAdmin,
-      userIdType: typeof userId,
-      adminIdType: typeof adminTelegramId,
-      userIdString: userId.toString(),
-      adminIdString: adminTelegramId?.toString(),
-      comparison: `${userId.toString()} === ${adminTelegramId?.toString()}`
-    });
-    
-    // Максимально быстрый путь: используем пользователя, уже загруженного в authenticateToken (без повторных запросов к БД)
-    // Фоллбек: если userRecord по какой-то причине не проставлен — делаем ОДИН lean-запрос по индексу telegramId
-    let u = req.userRecord;
-    if (!u) {
-      const { User } = await import('../models/User');
-      u = await User.findOne({ telegramId: userId })
-        .select('telegramId subscriptionStatus subscriptionExpiresAt lastDailyAdviceDate lastYesNoDate lastThreeCardsDate')
-        .lean();
-      req.userRecord = u;
-    }
-    if (!u) {
+
+    logger.info('Subscription status check', { userId });
+
+    const subscriptionInfo = await buildSubscriptionInfoForRequest(req);
+    if (!subscriptionInfo) {
       return res.status(401).json({
         success: false,
-        error: 'User not found'
+        error: 'User not found',
       });
     }
 
-    const now = new Date();
-    const hasSubscription =
-      isAdmin ||
-      (u?.subscriptionStatus === 1 &&
-        u?.subscriptionExpiresAt &&
-        new Date(u.subscriptionExpiresAt).getTime() > now.getTime());
+    logger.info('Subscription status response sent', { userId, durationMs: Date.now() - start });
 
-    const cooldowns = await getFreeUsageCooldowns(userId);
-
-    const hasUsedDailyAdviceTodayValue = cooldowns.dailyAdviceMsRemaining > 0;
-    const hasUsedYesNoToday = cooldowns.yesNoMsRemaining > 0;
-    const hasUsedThreeCardsTodayValue = cooldowns.threeCardsMsRemaining > 0;
-    
-    logger.info('Subscription status check details', {
-      userId,
-      hasSubscription,
-      isAdmin,
-      hasUsedDailyAdviceToday: hasUsedDailyAdviceTodayValue,
-      hasUsedYesNoToday,
-      hasUsedThreeCardsToday: hasUsedThreeCardsTodayValue,
-      cooldowns,
-      codeVersion: '2026-01-21-daily-reset'
-    });
-    
-    // Формируем ответ в формате, который ожидает фронтенд
-    // Администратор всегда имеет доступ ко всем раскладам
-    // Для бесплатных пользователей: 1 раз в день (сброс в полночь по Москве)
-    const remainingDailyAdvice = isAdmin ? -1 : (hasSubscription ? -1 : (hasUsedDailyAdviceTodayValue ? 0 : 1));
-    const remainingYesNo = isAdmin ? -1 : (hasSubscription ? -1 : (hasUsedYesNoToday ? 0 : 1));
-    const remainingThreeCards = isAdmin ? -1 : (hasSubscription ? -1 : (hasUsedThreeCardsTodayValue ? 0 : 1));
-    
-    const subscriptionInfo = {
-      hasSubscription,
-      // canUseDailyAdvice должен быть false если remainingDailyAdvice === 0
-      canUseDailyAdvice: hasSubscription || isAdmin || remainingDailyAdvice > 0,
-      canUseYesNo: hasSubscription || isAdmin || remainingYesNo > 0,
-      canUseThreeCards: hasSubscription || isAdmin || remainingThreeCards > 0,
-      remainingDailyAdvice,
-      remainingYesNo,
-      remainingThreeCards,
-      cooldowns,
-    };
-    
-    logger.info('Subscription info response', {
-      userId,
-      isAdmin,
-      subscriptionInfo,
-      calculatedRemaining: {
-        dailyAdvice: remainingDailyAdvice,
-        yesNo: remainingYesNo,
-        threeCards: remainingThreeCards
-      },
-      usageChecks: {
-        hasUsedDailyAdviceToday: hasUsedDailyAdviceTodayValue,
-        hasUsedYesNoToday,
-        hasUsedThreeCardsToday: hasUsedThreeCardsTodayValue
-      }
-    });
-    
     res.json({
       success: true,
-      subscriptionInfo
+      subscriptionInfo,
     });
-
-    logger.info('Subscription status response sent', { userId, durationMs: Date.now() - start });
   } catch (error) {
     logger.error('Subscription status error', { error, userId: req.user?.telegramId });
     res.status(500).json({
