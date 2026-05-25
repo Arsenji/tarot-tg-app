@@ -1,5 +1,6 @@
 import axios, { AxiosResponse } from 'axios';
 import logger from '../utils/logger';
+import { TOKEN_PACKAGES, TokenPackageId } from '../constants/tokens';
 
 export interface YooKassaPayment {
   id: string;
@@ -16,7 +17,7 @@ export interface YooKassaPayment {
   description: string;
   metadata: {
     userId: string;
-    plan: string;
+    tokenPackage: string;
   };
 }
 
@@ -33,7 +34,7 @@ export interface PaymentRequest {
   description: string;
   metadata: {
     userId: string;
-    plan: string;
+    tokenPackage: string;
   };
   receipt?: {
     customer: {
@@ -53,28 +54,7 @@ export interface PaymentRequest {
   };
 }
 
-export const SUBSCRIPTION_PLANS = {
-  weekly: {
-    name: 'Недельная подписка',
-    price: '299.00',
-    duration: 7
-  },
-  monthly: {
-    name: 'Месячная подписка',
-    price: '699.00',
-    duration: 30
-  },
-  quarterly: {
-    name: 'Квартальная подписка',
-    price: '1999.00',
-    duration: 90
-  },
-  yearly: {
-    name: 'Годовая подписка',
-    price: '10990.00',
-    duration: 365
-  }
-};
+export { TOKEN_PACKAGES };
 
 export class YooKassaService {
   private shopId: string;
@@ -90,57 +70,57 @@ export class YooKassaService {
     return `Basic ${Buffer.from(`${this.shopId}:${this.secretKey}`).toString('base64')}`;
   }
 
-  async createPayment(
+  async createTokenPayment(
     userId: string,
-    plan: keyof typeof SUBSCRIPTION_PLANS,
+    packageId: TokenPackageId,
     returnUrl: string,
     cancelUrl?: string
   ): Promise<YooKassaPayment | null> {
     try {
-      const planConfig = SUBSCRIPTION_PLANS[plan];
-      
+      const pkg = TOKEN_PACKAGES[packageId];
+
       const paymentData: PaymentRequest = {
         amount: {
-          value: planConfig.price,
-          currency: 'RUB'
+          value: pkg.price,
+          currency: 'RUB',
         },
         confirmation: {
           type: 'redirect',
-          return_url: returnUrl
+          return_url: returnUrl,
         },
-        description: `Подписка на Таро-бот: ${planConfig.name}`,
+        description: `Покупка токенов: ${pkg.name}`,
         metadata: {
           userId,
-          plan
+          tokenPackage: String(packageId),
         },
         receipt: {
           customer: {
-            email: `${userId}@tarot-bot.local`
+            email: `${userId}@tarot-bot.local`,
           },
           items: [{
-            description: planConfig.name,
+            description: pkg.name,
             quantity: '1',
             amount: {
-              value: planConfig.price,
-              currency: 'RUB'
+              value: pkg.price,
+              currency: 'RUB',
             },
             vat_code: 1,
             payment_mode: 'full_payment',
-            payment_subject: 'service'
-          }]
-        }
+            payment_subject: 'service',
+          }],
+        },
       };
 
       if (cancelUrl) {
         paymentData.confirmation.cancel_url = cancelUrl;
       }
 
-      logger.info('Creating YooKassa payment', {
+      logger.info('Creating YooKassa token payment', {
         userId,
-        plan,
-        amount: planConfig.price,
+        tokenPackage: packageId,
+        amount: pkg.price,
         returnUrl,
-        cancelUrl
+        cancelUrl,
       });
 
       const response: AxiosResponse<YooKassaPayment> = await axios.post(
@@ -148,28 +128,28 @@ export class YooKassaService {
         paymentData,
         {
           headers: {
-            'Authorization': this.getAuthHeader(),
+            Authorization: this.getAuthHeader(),
             'Content-Type': 'application/json',
-            'Idempotence-Key': `${userId}-${plan}-${Date.now()}`
-          }
+            'Idempotence-Key': `${userId}-tokens-${packageId}-${Date.now()}`,
+          },
         }
       );
 
-      logger.info('YooKassa payment created successfully', {
+      logger.info('YooKassa token payment created', {
         paymentId: response.data.id,
         userId,
-        plan,
-        status: response.data.status
+        tokenPackage: packageId,
+        status: response.data.status,
       });
 
       return response.data;
     } catch (error: any) {
-      logger.error('Failed to create YooKassa payment', {
+      logger.error('Failed to create YooKassa token payment', {
         error: error.response?.data || error.message,
         userId,
-        plan,
+        packageId,
         returnUrl,
-        cancelUrl
+        cancelUrl,
       });
       return null;
     }
@@ -181,8 +161,8 @@ export class YooKassaService {
         `${this.baseUrl}/payments/${paymentId}`,
         {
           headers: {
-            'Authorization': this.getAuthHeader()
-          }
+            Authorization: this.getAuthHeader(),
+          },
         }
       );
 
@@ -190,7 +170,7 @@ export class YooKassaService {
     } catch (error: any) {
       logger.error('Failed to get YooKassa payment', {
         error: error.response?.data || error.message,
-        paymentId
+        paymentId,
       });
       return null;
     }
@@ -203,10 +183,10 @@ export class YooKassaService {
         {},
         {
           headers: {
-            'Authorization': this.getAuthHeader(),
+            Authorization: this.getAuthHeader(),
             'Content-Type': 'application/json',
-            'Idempotence-Key': `cancel-${paymentId}-${Date.now()}`
-          }
+            'Idempotence-Key': `cancel-${paymentId}-${Date.now()}`,
+          },
         }
       );
 
@@ -215,7 +195,7 @@ export class YooKassaService {
     } catch (error: any) {
       logger.error('Failed to cancel YooKassa payment', {
         error: error.response?.data || error.message,
-        paymentId
+        paymentId,
       });
       return false;
     }

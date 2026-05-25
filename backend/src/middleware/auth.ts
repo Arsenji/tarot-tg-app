@@ -93,7 +93,9 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
             username: decoded.username || '',
             languageCode: 'ru',
             subscriptionStatus: 0,
-            freeYesNoUsed: false
+            tokensBalance: 0,
+            freeYesNoUsed: 0,
+            freeThreeCardsUsed: 0,
           });
           
           req.user = {
