@@ -2,6 +2,7 @@ import express from 'express';
 import { authenticateToken } from '../middleware/auth';
 import { Payment } from '../models/Payment';
 import { YooKassaService } from '../services/yookassa';
+import { creditTokensForSucceededPayment } from '../utils/paymentReconcile';
 import logger from '../utils/logger';
 
 const router = express.Router();
@@ -24,6 +25,11 @@ router.get('/status/:paymentId', async (req: any, res) => {
       });
     }
 
+    const yooKassa = new YooKassaService(
+      process.env.YOOKASSA_SHOP_ID || '',
+      process.env.YOOKASSA_SECRET_KEY || ''
+    );
+
     // 1. Проверяем нашу БД: по paymentId (YooKassa id) или по returnRef (из URL после редиректа)
     let paymentRecord = await Payment.findOne({ paymentId, userId });
     if (!paymentRecord) {
@@ -31,23 +37,31 @@ router.get('/status/:paymentId', async (req: any, res) => {
     }
 
     if (paymentRecord) {
+      const realId = paymentRecord.paymentId;
+      const yooPayment = await yooKassa.getPayment(realId);
+      const paid = yooPayment?.status === 'succeeded' || paymentRecord.status === 'succeeded';
+
+      // Резервное начисление токенов, если webhook не дошёл (идемпотентно).
+      if (paid && !paymentRecord.tokensCredited) {
+        await creditTokensForSucceededPayment({
+          paymentId: realId,
+          metadata: yooPayment?.metadata,
+        });
+        paymentRecord = (await Payment.findOne({ paymentId: realId })) || paymentRecord;
+      }
+
       return res.json({
         success: true,
         payment: {
-          paymentId: paymentRecord.paymentId,
-          status: paymentRecord.status,
-          paid: paymentRecord.status === 'succeeded',
-          subscriptionActivated: paymentRecord.subscriptionActivated,
+          paymentId: realId,
+          status: yooPayment?.status || paymentRecord.status,
+          paid,
+          tokensCredited: paymentRecord.tokensCredited,
         },
       });
     }
 
     // 2. Fallback: запрос в YooKassa (платежи из бота или старые)
-    const yooKassa = new YooKassaService(
-      process.env.YOOKASSA_SHOP_ID || '',
-      process.env.YOOKASSA_SECRET_KEY || ''
-    );
-
     const yooPayment = await yooKassa.getPayment(paymentId);
 
     if (!yooPayment) {
@@ -68,13 +82,20 @@ router.get('/status/:paymentId', async (req: any, res) => {
 
     const paid = yooPayment.status === 'succeeded';
 
+    if (paid) {
+      await creditTokensForSucceededPayment({
+        paymentId: yooPayment.id,
+        metadata: yooPayment.metadata,
+      });
+    }
+
     return res.json({
       success: true,
       payment: {
         paymentId: yooPayment.id,
         status: yooPayment.status,
         paid,
-        subscriptionActivated: paid, // если succeeded — подписка активирована webhook'ом
+        tokensCredited: paid,
       },
     });
   } catch (error) {

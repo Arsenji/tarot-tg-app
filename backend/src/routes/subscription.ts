@@ -6,8 +6,11 @@ import { authenticateToken } from '../middleware/auth';
 import { verifyYooKassaWebhook } from '../middleware/verifyYooKassaSignature';
 import { YooKassaService, TOKEN_PACKAGES } from '../services/yookassa';
 import { Payment } from '../models/Payment';
-import { creditTokenPackage } from '../utils/tokens';
 import { isTokenPackageId } from '../constants/tokens';
+import {
+  creditTokensForSucceededPayment,
+  getPaymentReturnUrl,
+} from '../utils/paymentReconcile';
 import logger from '../utils/logger';
 
 const posthog = new PostHog('phc_pA7Aai2zies44X8G3ebVUTQii7DmCRxt26Cww33HPsN3', {
@@ -63,54 +66,24 @@ router.post('/webhook', webhookLimiter, verifyYooKassaWebhook, async (req, res) 
       return res.status(200).json({ status: 'ok', message: 'Payment not confirmed' });
     }
 
-    const payment = await Payment.findOneAndUpdate(
-      { paymentId, processed: false },
-      {
-        $set: {
-          status: 'succeeded',
-          tokensCredited: true,
-          processed: true,
-        },
-      },
-      { new: true }
-    );
-
-    if (!payment) {
-      logger.info('Webhook: payment already processed or not found (idempotent)', { paymentId });
-      return res.status(200).json({ status: 'ok', message: 'Already processed' });
-    }
-
     const metadata = verifiedPayment.metadata || paymentData.metadata;
-    const packageRaw = metadata?.tokenPackage || payment.tokenPackage;
-    const userId = parseInt(metadata?.userId || payment.userId, 10);
+    const result = await creditTokensForSucceededPayment({ paymentId, metadata });
 
-    if (userId && packageRaw && isTokenPackageId(String(packageRaw))) {
-      const packageId = String(packageRaw) as import('../constants/tokens').TokenPackageId;
-      const pkg = TOKEN_PACKAGES[packageId];
-      const newBalance = await creditTokenPackage(userId, packageId);
-
-      if (newBalance != null) {
-        logger.info('Tokens credited via webhook', {
-          userId,
-          tokenPackage: packageId,
+    if (result.credited && result.tokenPackage && result.userId) {
+      const pkg = TOKEN_PACKAGES[result.tokenPackage];
+      posthog.capture({
+        distinctId: String(result.userId),
+        event: 'tokens_purchased',
+        properties: {
+          package: pkg.tokens,
+          amount: Number(paymentData.amount?.value || pkg.price),
+          currency: paymentData.amount?.currency || 'RUB',
           paymentId,
-          amount: paymentData.amount?.value,
-          tokensBalance: newBalance,
-        });
-
-        posthog.capture({
-          distinctId: String(userId),
-          event: 'tokens_purchased',
-          properties: {
-            package: pkg.tokens,
-            amount: Number(paymentData.amount?.value || pkg.price),
-            currency: paymentData.amount?.currency || 'RUB',
-            paymentId,
-          },
-        });
-      } else {
-        logger.error('Failed to credit tokens via webhook', { userId, packageId, paymentId });
-      }
+          source: 'webhook',
+        },
+      });
+    } else {
+      logger.info('Webhook: nothing to credit (already processed or no record)', { paymentId });
     }
 
     return res.status(200).json({ status: 'ok' });
@@ -141,7 +114,7 @@ router.post('/create-payment', paymentLimiter, async (req: any, res) => {
     );
 
     const returnRef = randomUUID();
-    const returnUrl = `${process.env.FRONTEND_URL}/payment-result?paymentId=${returnRef}`;
+    const returnUrl = getPaymentReturnUrl(returnRef);
     const cancelUrl = `${process.env.FRONTEND_URL}/payment/cancel`;
 
     const payment = await yooKassa.createTokenPayment(

@@ -6,6 +6,10 @@ import { Review } from '../models/Review';
 import { Payment } from '../models/Payment';
 import { buildWalletSnapshot, creditTokenPackage } from '../utils/tokens';
 import { TOKEN_PACKAGES, TokenPackageId } from '../constants/tokens';
+import {
+  reconcilePendingPayments,
+  getPaymentReturnUrl,
+} from '../utils/paymentReconcile';
 import logger from '../utils/logger';
 import { YooKassaService } from '../services/yookassa';
 
@@ -125,9 +129,26 @@ const initializeBot = () => {
         // Продолжаем выполнение даже если БД недоступна
       }
 
+      // Возврат после оплаты (deep link https://t.me/<bot>?start=paid)
+      const startPayload = (ctx as any).startPayload as string | undefined;
+      let paidPrefix = '';
+      if (startPayload === 'paid') {
+        try {
+          const newBalance = await reconcilePendingPayments(userId);
+          if (newBalance != null) {
+            paidPrefix = `✅ Оплата получена! Токены начислены.\n\n`;
+          } else {
+            paidPrefix = `⏳ Оплата обрабатывается. Баланс обновится в течение минуты.\n\n`;
+          }
+        } catch (reconcileError) {
+          logger.error('Error reconciling payments on /start', { error: reconcileError, userId });
+        }
+      }
+
       try {
         const walletLine = await formatWalletMessage(userId);
-        let welcomeMessage = '🔮 Добро пожаловать в Таро-бот!\n\n' +
+        let welcomeMessage = paidPrefix +
+          '🔮 Добро пожаловать в Таро-бот!\n\n' +
           'Я помогу вам получить ответы на важные вопросы с помощью карт Таро.\n\n' +
           `${walletLine}\n\n` +
           '🎁 «Совет дня» — бесплатно 1 раз в сутки\n' +
@@ -178,6 +199,11 @@ const initializeBot = () => {
     try {
       const userId = ctx.from?.id;
       if (!userId) return;
+      try {
+        await reconcilePendingPayments(userId);
+      } catch (reconcileError) {
+        logger.error('Error reconciling payments on /balance', { error: reconcileError, userId });
+      }
       await ctx.reply(await formatWalletMessage(userId), getMainKeyboard());
     } catch (error) {
       logger.error('Error in /balance command', { error, userId: ctx.from?.id });
@@ -253,16 +279,18 @@ const initializeBot = () => {
   bot.hears('Купить токены', showTokenPackages);
   bot.hears('Купить подписку', showTokenPackages);
 
-  bot.hears('Мой баланс', async (ctx: Context) => {
+  const showBalance = async (ctx: Context) => {
     const userId = ctx.from?.id;
     if (!userId) return;
+    try {
+      await reconcilePendingPayments(userId);
+    } catch (reconcileError) {
+      logger.error('Error reconciling payments on balance', { error: reconcileError, userId });
+    }
     await ctx.reply(await formatWalletMessage(userId), getMainKeyboard());
-  });
-  bot.hears('Моя подписка', async (ctx: Context) => {
-    const userId = ctx.from?.id;
-    if (!userId) return;
-    await ctx.reply(await formatWalletMessage(userId), getMainKeyboard());
-  });
+  };
+  bot.hears('Мой баланс', showBalance);
+  bot.hears('Моя подписка', showBalance);
 
   bot.action(/^token_(10|25|50|100)$/, async (ctx: Context) => {
     try {
@@ -293,7 +321,7 @@ const initializeBot = () => {
       }
 
       const returnRef = randomUUID();
-      const returnUrl = `${process.env.FRONTEND_URL}/payment-result?paymentId=${returnRef}`;
+      const returnUrl = getPaymentReturnUrl(returnRef);
       const payment = await yooKassa.createTokenPayment(userId.toString(), packageId, returnUrl);
 
       if (!payment) {
@@ -525,6 +553,17 @@ const startBot = async () => {
     // Регистрируем все обработчики команд и сообщений
     initializeBot();
     logger.info('Bot handlers registered');
+
+    // Получаем username бота для построения deep link возврата после оплаты
+    try {
+      const me = await bot.telegram.getMe();
+      if (me?.username && !process.env.BOT_USERNAME) {
+        process.env.BOT_USERNAME = me.username;
+        logger.info('Bot username resolved for payment return links', { username: me.username });
+      }
+    } catch (meError) {
+      logger.warn('Could not resolve bot username via getMe', { error: meError });
+    }
 
     // Запускаем long-polling
     await bot.launch();
