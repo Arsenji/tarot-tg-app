@@ -113,19 +113,39 @@ export async function creditTokenPackage(
   return creditTokens(telegramId, getTokenPackageTokens(packageId));
 }
 
-async function consumeYesNoInternal(telegramId: number): Promise<ConsumeResult> {
-  // 1) Атомарно тратим бесплатную попытку. Гард матчит и документы без поля
-  //    (старые пользователи, созданные до появления токенов): $inc по
-  //    отсутствующему полю трактует его как 0 и ставит 1.
-  const freeUpdated = await User.findOneAndUpdate(
+const NUMERIC_BSON_TYPES = ['int', 'long', 'double', 'decimal'];
+
+/**
+ * Coerces a free-counter field to a number in-place. Legacy users may have it
+ * stored as a boolean (old "used today" flag) or missing entirely; without this
+ * a numeric $inc would fail or never match, causing a false "insufficient" error.
+ */
+async function normalizeFreeField(
+  telegramId: number,
+  field: 'freeYesNoUsed' | 'freeThreeCardsUsed'
+): Promise<void> {
+  await User.updateOne({ telegramId }, [
     {
-      telegramId,
-      $or: [
-        { freeYesNoUsed: { $exists: false } },
-        { freeYesNoUsed: null },
-        { freeYesNoUsed: { $lt: FREE_YES_NO_LIFETIME } },
-      ],
+      $set: {
+        [field]: {
+          $cond: [
+            { $in: [{ $type: `$${field}` }, NUMERIC_BSON_TYPES] },
+            `$${field}`,
+            0,
+          ],
+        },
+      },
     },
+  ]);
+}
+
+async function consumeYesNoInternal(telegramId: number): Promise<ConsumeResult> {
+  // Приводим поле к числу (чиним legacy boolean/отсутствие), затем атомарно
+  // тратим бесплатную попытку числовым $inc с гардом по лимиту.
+  await normalizeFreeField(telegramId, 'freeYesNoUsed');
+
+  const freeUpdated = await User.findOneAndUpdate(
+    { telegramId, freeYesNoUsed: { $lt: FREE_YES_NO_LIFETIME } },
     { $inc: { freeYesNoUsed: 1 } },
     { new: true }
   );
@@ -169,15 +189,10 @@ async function consumeYesNoInternal(telegramId: number): Promise<ConsumeResult> 
 }
 
 async function consumeThreeCardsInternal(telegramId: number): Promise<ConsumeResult> {
+  await normalizeFreeField(telegramId, 'freeThreeCardsUsed');
+
   const freeUpdated = await User.findOneAndUpdate(
-    {
-      telegramId,
-      $or: [
-        { freeThreeCardsUsed: { $exists: false } },
-        { freeThreeCardsUsed: null },
-        { freeThreeCardsUsed: { $lt: FREE_THREE_CARDS_LIFETIME } },
-      ],
-    },
+    { telegramId, freeThreeCardsUsed: { $lt: FREE_THREE_CARDS_LIFETIME } },
     { $inc: { freeThreeCardsUsed: 1 } },
     { new: true }
   );
