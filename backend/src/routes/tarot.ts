@@ -3,69 +3,48 @@ import mongoose from 'mongoose';
 import { Types } from 'mongoose';
 import { authenticateToken } from '../middleware/auth';
 import { openAIService } from '../services/openai';
-import { 
-  checkSubscriptionStatus, 
-  hasUsedFreeYesNo, 
-  markFreeYesNoUsed,
-  hasUsedDailyAdviceToday,
+import {
   markDailyAdviceUsed,
-  hasUsedThreeCardsToday,
-  markThreeCardsUsed,
-  getFreeUsageCooldowns
+  getFreeUsageCooldowns,
 } from '../utils/subscription';
+import {
+  buildWalletSnapshot,
+  canAffordYesNo,
+  canAffordThreeCards,
+  tryConsumeYesNo,
+  tryConsumeThreeCards,
+  WalletSnapshot,
+} from '../utils/tokens';
+import { YES_NO_TOKEN_COST, THREE_CARDS_TOKEN_COST } from '../constants/tokens';
 import { TarotReading } from '../models/TarotReading';
 import logger from '../utils/logger';
 import { getRussianCardName, getCardImagePath } from '../utils/cardTranslations';
 
 const router = express.Router();
 
-/** Fresh subscription snapshot (same shape as GET /subscription-status). Uses DB for cooldowns after mark*Used. */
-async function buildSubscriptionInfoForRequest(req: any): Promise<Record<string, unknown> | null> {
-  try {
-    const userId = req.user?.telegramId;
-    if (userId == null) return null;
-    const adminTelegramId = process.env.ADMIN_TELEGRAM_ID;
-    const isAdmin = !!(adminTelegramId && userId.toString() === adminTelegramId.toString());
-    let u = req.userRecord;
-    if (!u) {
-      const { User } = await import('../models/User');
-      u = await User.findOne({ telegramId: userId })
-        .select('telegramId subscriptionStatus subscriptionExpiresAt lastDailyAdviceDate lastYesNoDate lastThreeCardsDate')
-        .lean();
-      req.userRecord = u;
-    }
-    if (!u) return null;
+function isAdminUser(userId: number): boolean {
+  const adminTelegramId = process.env.ADMIN_TELEGRAM_ID;
+  return !!(adminTelegramId && userId.toString() === adminTelegramId.toString());
+}
 
-    const now = new Date();
-    const hasSubscription =
-      isAdmin ||
-      (u?.subscriptionStatus === 1 &&
-        u?.subscriptionExpiresAt &&
-        new Date(u.subscriptionExpiresAt).getTime() > now.getTime());
+async function buildWalletInfoForRequest(req: any): Promise<WalletSnapshot | null> {
+  const userId = req.user?.telegramId;
+  if (userId == null) return null;
+  return buildWalletSnapshot(userId, isAdminUser(userId));
+}
 
-    const cooldowns = await getFreeUsageCooldowns(userId);
-    const hasUsedDailyAdviceTodayValue = cooldowns.dailyAdviceMsRemaining > 0;
-    const hasUsedYesNoToday = cooldowns.yesNoMsRemaining > 0;
-    const hasUsedThreeCardsTodayValue = cooldowns.threeCardsMsRemaining > 0;
+function sendInsufficientTokens(res: express.Response, required: number, balance: number) {
+  return res.status(402).json({
+    success: false,
+    code: 'INSUFFICIENT_TOKENS',
+    required,
+    balance,
+  });
+}
 
-    const remainingDailyAdvice = isAdmin ? -1 : (hasSubscription ? -1 : (hasUsedDailyAdviceTodayValue ? 0 : 1));
-    const remainingYesNo = isAdmin ? -1 : (hasSubscription ? -1 : (hasUsedYesNoToday ? 0 : 1));
-    const remainingThreeCards = isAdmin ? -1 : (hasSubscription ? -1 : (hasUsedThreeCardsTodayValue ? 0 : 1));
-
-    return {
-      hasSubscription,
-      canUseDailyAdvice: hasSubscription || isAdmin || remainingDailyAdvice > 0,
-      canUseYesNo: hasSubscription || isAdmin || remainingYesNo > 0,
-      canUseThreeCards: hasSubscription || isAdmin || remainingThreeCards > 0,
-      remainingDailyAdvice,
-      remainingYesNo,
-      remainingThreeCards,
-      cooldowns,
-    };
-  } catch (e) {
-    logger.error('buildSubscriptionInfoForRequest failed', { error: e });
-    return null;
-  }
+function attachWallet(wallet: WalletSnapshot | null) {
+  if (!wallet) return {};
+  return { walletInfo: wallet, tokensBalance: wallet.tokensBalance };
 }
 
 // Middleware для всех маршрутов
@@ -88,22 +67,19 @@ router.get('/daily-card', async (req: any, res) => {
       adminIdString: adminTelegramId?.toString()
     });
     
-    // Проверяем подписку и лимит для бесплатных пользователей (1 раз в день, сброс в полночь MSK)
-    const subscriptionStatus = await checkSubscriptionStatus(userId);
     const cooldowns = await getFreeUsageCooldowns(userId);
     const hasUsedToday = cooldowns.dailyAdviceMsRemaining > 0;
-    
-    logger.info('Daily advice subscription check', {
+
+    logger.info('Daily advice access check', {
       userId,
-      hasSubscription: subscriptionStatus.hasSubscription,
       isAdmin,
       hasUsedToday,
       dailyAdviceMsRemaining: cooldowns.dailyAdviceMsRemaining,
       dailyAdviceHoursRemaining: cooldowns.dailyAdviceHoursRemaining,
-      willAllow: subscriptionStatus.hasSubscription || isAdmin || !hasUsedToday
+      willAllow: isAdmin || !hasUsedToday,
     });
-    
-    if (!subscriptionStatus.hasSubscription && !isAdmin && hasUsedToday) {
+
+    if (!isAdmin && hasUsedToday) {
       const nextAvailableAt = new Date(Date.now() + cooldowns.dailyAdviceMsRemaining).toISOString();
       return res.status(403).json({
         success: false,
@@ -148,17 +124,27 @@ router.get('/daily-card', async (req: any, res) => {
       });
     }
 
-    if (!subscriptionStatus.hasSubscription && !isAdmin) {
+    if (!isAdmin) {
       await markDailyAdviceUsed(userId);
-      logger.info('Daily Advice marked as used for free user', { telegramId: userId });
+      logger.info('Daily Advice marked as used', { telegramId: userId });
     }
 
+    const wallet = await buildWalletInfoForRequest(req);
+    const cooldownAfter = await getFreeUsageCooldowns(userId);
     res.json({
       success: true,
       card: {
         name: russianCardName,
         interpretation: interpretation.interpretation
-      }
+      },
+      ...attachWallet(wallet),
+      cooldown: {
+        msRemaining: cooldownAfter.dailyAdviceMsRemaining,
+        hoursRemaining: cooldownAfter.dailyAdviceHoursRemaining,
+        nextAvailableAt: cooldownAfter.dailyAdviceMsRemaining > 0
+          ? new Date(Date.now() + cooldownAfter.dailyAdviceMsRemaining).toISOString()
+          : null,
+      },
     });
   } catch (error) {
     logger.error('Daily card error', { error, userId: req.user?.telegramId });
@@ -186,22 +172,19 @@ router.post('/daily-advice', async (req: any, res) => {
       adminIdString: adminTelegramId?.toString()
     });
     
-    // Проверяем подписку и лимит для бесплатных пользователей (1 раз в день, сброс в полночь MSK)
-    const subscriptionStatus = await checkSubscriptionStatus(userId);
     const cooldowns = await getFreeUsageCooldowns(userId);
     const hasUsedToday = cooldowns.dailyAdviceMsRemaining > 0;
-    
-    logger.info('Daily advice subscription check', {
+
+    logger.info('Daily advice access check', {
       userId,
-      hasSubscription: subscriptionStatus.hasSubscription,
       isAdmin,
       hasUsedToday,
       dailyAdviceMsRemaining: cooldowns.dailyAdviceMsRemaining,
       dailyAdviceHoursRemaining: cooldowns.dailyAdviceHoursRemaining,
-      willAllow: subscriptionStatus.hasSubscription || isAdmin || !hasUsedToday
+      willAllow: isAdmin || !hasUsedToday,
     });
-    
-    if (!subscriptionStatus.hasSubscription && !isAdmin && hasUsedToday) {
+
+    if (!isAdmin && hasUsedToday) {
       const nextAvailableAt = new Date(Date.now() + cooldowns.dailyAdviceMsRemaining).toISOString();
       return res.status(403).json({
         success: false,
@@ -247,87 +230,60 @@ router.post('/daily-advice', async (req: any, res) => {
     }
     const imagePath = getCardImagePath(randomCard, isReversed);
 
-    // Отмечаем использование Daily Advice для бесплатных пользователей ПОСЛЕ успешного получения интерпретации
-    if (!subscriptionStatus.hasSubscription && !isAdmin) {
+    if (!isAdmin) {
       await markDailyAdviceUsed(userId);
-      logger.info('Daily Advice marked as used for free user', { telegramId: userId });
+      logger.info('Daily Advice marked as used', { telegramId: userId });
     }
 
-    // Сохраняем расклад ТОЛЬКО для пользователей с подпиской (и админа)
-    if (subscriptionStatus.hasSubscription || isAdmin) {
-      try {
-        if (interpretation.interpretation && interpretation.interpretation.trim().length > 0) {
-          logger.info('Attempting to save daily-advice reading', {
-            userId: req.user.userId,
-            telegramId: userId,
-            cardName: randomCard,
-            hasInterpretation: !!interpretation.interpretation
-          });
-          
-          const saved = await openAIService.saveReading(
-            req.user.userId,
-            userId,
-            {
-              cards: [{
-                name: randomCard, // Английское название для сохранения
-                position: 'daily',
-                isReversed: isReversed
-              }],
-              question: '', // Daily advice не имеет вопроса
-              readingType: 'single'
-            },
-            interpretation.interpretation
-          );
-          if (!saved) {
-            logger.warn('Failed to save daily-advice reading', { 
-              userId: req.user.userId, 
-              telegramId: userId,
-              cardName: randomCard
-            });
-          } else {
-            logger.info('Daily-advice reading saved successfully', { 
-              userId: req.user.userId, 
-              telegramId: userId,
-              cardName: randomCard
-            });
-          }
-        } else {
-          logger.warn('Skipping save: interpretation is empty', { 
-            userId: req.user.userId, 
-            telegramId: userId 
-          });
-        }
-      } catch (saveError) {
-        logger.error('Error saving daily-advice reading', { 
-          error: saveError, 
-          userId: req.user.userId, 
-          telegramId: userId,
-          errorMessage: saveError instanceof Error ? saveError.message : String(saveError)
-        });
+    try {
+      if (interpretation.interpretation && interpretation.interpretation.trim().length > 0) {
+        await openAIService.saveReading(
+          req.user.userId,
+          userId,
+          {
+            cards: [{
+              name: randomCard,
+              position: 'daily',
+              isReversed: isReversed,
+            }],
+            question: '',
+            readingType: 'single',
+          },
+          interpretation.interpretation
+        );
       }
+    } catch (saveError) {
+      logger.error('Error saving daily-advice reading', { error: saveError, userId, telegramId: userId });
     }
 
-    const subscriptionInfo = await buildSubscriptionInfoForRequest(req);
-    // Формируем ответ в формате, который ожидает фронтенд
+    const wallet = await buildWalletInfoForRequest(req);
+    const cooldownAfter = await getFreeUsageCooldowns(userId);
     res.json({
       success: true,
       data: {
         card: {
-          name: russianCardName, // Русское название
-          category: 'major', // По умолчанию все карты из списка - старшие арканы
-          isReversed: isReversed, // Добавляем информацию о перевернутости
+          name: russianCardName,
+          category: 'major',
+          isReversed: isReversed,
           uprightImage: getCardImagePath(randomCard, false),
           reversedImage: getCardImagePath(randomCard, true),
-          image: imagePath, // Добавляем поле image для совместимости
-          imagePath: imagePath, // Добавляем поле imagePath для совместимости
+          image: imagePath,
+          imagePath: imagePath,
           uprightInterpretation: isReversed ? '' : interpretation.interpretation,
-          reversedInterpretation: isReversed ? interpretation.interpretation : ''
+          reversedInterpretation: isReversed ? interpretation.interpretation : '',
         },
         interpretation: interpretation.interpretation,
-        advice: interpretation.interpretation, // Для совместимости с фронтендом
-        category: 'major'
+        advice: interpretation.interpretation,
+        category: 'major',
       },
-      ...(subscriptionInfo ? { subscriptionInfo } : {}),
+      ...attachWallet(wallet),
+      cooldown: {
+        msRemaining: cooldownAfter.dailyAdviceMsRemaining,
+        hoursRemaining: cooldownAfter.dailyAdviceHoursRemaining,
+        nextAvailableAt: cooldownAfter.dailyAdviceMsRemaining > 0
+          ? new Date(Date.now() + cooldownAfter.dailyAdviceMsRemaining).toISOString()
+          : null,
+      },
     });
   } catch (error) {
     logger.error('Daily advice error', { error, userId: req.user?.telegramId });
@@ -344,37 +300,21 @@ router.post('/three-cards', async (req: any, res) => {
     const userId = req.user.telegramId;
     const question = req.body?.question || req.body?.userQuestion || '';
     
-    // Проверяем, является ли пользователь администратором
-    const adminTelegramId = process.env.ADMIN_TELEGRAM_ID;
-    const isAdmin = adminTelegramId && userId.toString() === adminTelegramId.toString();
-    
-    logger.info('Three cards access check', {
-      userId,
-      adminTelegramId,
-      isAdmin,
-      userIdString: userId.toString(),
-      adminIdString: adminTelegramId?.toString()
-    });
-    
-    // Проверяем подписку и лимит для бесплатных пользователей (1 раз в день, сброс в полночь MSK)
-    const subscriptionStatus = await checkSubscriptionStatus(userId);
-    const hasUsedToday = await hasUsedThreeCardsToday(userId);
-    
-    logger.info('Three cards subscription check', {
-      userId,
-      hasSubscription: subscriptionStatus.hasSubscription,
-      isAdmin,
-      hasUsedToday,
-      willAllow: subscriptionStatus.hasSubscription || isAdmin || !hasUsedToday
-    });
-    
-    if (!subscriptionStatus.hasSubscription && !isAdmin && hasUsedToday) {
-      return res.status(403).json({
-        success: false,
-        error: 'Three cards already used. Please wait 24 hours or subscribe for unlimited access.',
-        subscriptionRequired: true
-      });
+    const isAdmin = isAdminUser(userId);
+    const walletBefore = await buildWalletSnapshot(userId, isAdmin);
+    if (!walletBefore) {
+      return res.status(401).json({ success: false, error: 'User not found' });
     }
+    if (!canAffordThreeCards(walletBefore, isAdmin)) {
+      return sendInsufficientTokens(res, THREE_CARDS_TOKEN_COST, walletBefore.tokensBalance);
+    }
+
+    logger.info('Three cards token check', {
+      userId,
+      isAdmin,
+      tokensBalance: walletBefore.tokensBalance,
+      freeThreeCardsRemaining: walletBefore.freeThreeCardsRemaining,
+    });
 
     const cards = [
       'The Fool', 'The Magician', 'The High Priestess', 'The Empress', 'The Emperor',
@@ -446,71 +386,35 @@ router.post('/three-cards', async (req: any, res) => {
       });
     }
 
-    // Отмечаем использование Three Cards для бесплатных пользователей ПОСЛЕ успешного получения интерпретации
-    if (!subscriptionStatus.hasSubscription && !isAdmin) {
-      await markThreeCardsUsed(userId);
-      logger.info('Three Cards marked as used for free user', { telegramId: userId });
+    const consumed = await tryConsumeThreeCards(userId, isAdmin);
+    if (!consumed.ok) {
+      return sendInsufficientTokens(res, consumed.required, consumed.balance);
     }
 
-    // Сохраняем расклад ТОЛЬКО для пользователей с подпиской (и админа)
-    if (subscriptionStatus.hasSubscription || isAdmin) {
-      try {
-        if (interpretation.interpretation && interpretation.interpretation.trim().length > 0) {
-          logger.info('Attempting to save three-cards reading', {
-            userId: req.user.userId,
-            telegramId: userId,
-            cardsCount: selectedCardsForAPI.length,
-            hasInterpretation: !!interpretation.interpretation
-          });
-          
-          const saved = await openAIService.saveReading(
-            req.user.userId,
-            userId,
-            {
-              cards: selectedCardsForAPI,
-              question,
-              readingType: 'three'
-            },
-            interpretation.interpretation
-          );
-          if (!saved) {
-            logger.warn('Failed to save three-cards reading', { 
-              userId: req.user.userId, 
-              telegramId: userId,
-              cardsCount: selectedCardsForAPI.length
-            });
-          } else {
-            logger.info('Three-cards reading saved successfully', { 
-              userId: req.user.userId, 
-              telegramId: userId,
-              cardsCount: selectedCardsForAPI.length
-            });
-          }
-        } else {
-          logger.warn('Skipping save: interpretation is empty', { 
-            userId: req.user.userId, 
-            telegramId: userId 
-          });
-        }
-      } catch (saveError) {
-        logger.error('Error saving three-cards reading', { 
-          error: saveError, 
-          userId: req.user.userId, 
-          telegramId: userId,
-          errorMessage: saveError instanceof Error ? saveError.message : String(saveError)
-        });
+    try {
+      if (interpretation.interpretation && interpretation.interpretation.trim().length > 0) {
+        await openAIService.saveReading(
+          req.user.userId,
+          userId,
+          { cards: selectedCardsForAPI, question, readingType: 'three' },
+          interpretation.interpretation
+        );
       }
+    } catch (saveError) {
+      logger.error('Error saving three-cards reading', { error: saveError, userId, telegramId: userId });
     }
 
-    const subscriptionInfoThree = await buildSubscriptionInfoForRequest(req);
+    const walletAfter = await buildWalletSnapshot(userId, isAdmin);
     res.json({
       success: true,
       data: {
-        cards: selectedCards, // Русские названия для фронтенда
+        cards: selectedCards,
         interpretation: interpretation.interpretation,
-        category: 'major'
+        category: 'major',
       },
-      ...(subscriptionInfoThree ? { subscriptionInfo: subscriptionInfoThree } : {}),
+      ...attachWallet(walletAfter),
+      tokensSpent: consumed.tokensSpent,
+      usedFree: consumed.usedFree,
     });
   } catch (error) {
     logger.error('Three cards error', { error, userId: req.user?.telegramId });
@@ -534,38 +438,21 @@ router.post('/yes-no', async (req: any, res) => {
       });
     }
 
-    // Проверяем, является ли пользователь администратором
-    const adminTelegramId = process.env.ADMIN_TELEGRAM_ID;
-    const isAdmin = adminTelegramId && userId.toString() === adminTelegramId.toString();
-    
-    logger.info('Yes/No access check', {
-      userId,
-      adminTelegramId,
-      isAdmin,
-      userIdString: userId.toString(),
-      adminIdString: adminTelegramId?.toString()
-    });
-    
-    // Проверяем подписку или бесплатное использование
-    const subscriptionStatus = await checkSubscriptionStatus(userId);
-    const hasUsedToday = await hasUsedFreeYesNo(userId);
-    
-    logger.info('Yes/No subscription check', {
-      userId,
-      hasSubscription: subscriptionStatus.hasSubscription,
-      isAdmin,
-      hasUsedToday,
-      willAllow: subscriptionStatus.hasSubscription || isAdmin || !hasUsedToday,
-      codeVersion: '2026-01-21-daily-reset'
-    });
-    
-    if (!subscriptionStatus.hasSubscription && !isAdmin && hasUsedToday) {
-      return res.status(403).json({
-        success: false,
-        error: 'Yes/No reading already used today. Subscription required for unlimited access.',
-        subscriptionRequired: true
-      });
+    const isAdmin = isAdminUser(userId);
+    const walletBefore = await buildWalletSnapshot(userId, isAdmin);
+    if (!walletBefore) {
+      return res.status(401).json({ success: false, error: 'User not found' });
     }
+    if (!canAffordYesNo(walletBefore, isAdmin)) {
+      return sendInsufficientTokens(res, YES_NO_TOKEN_COST, walletBefore.tokensBalance);
+    }
+
+    logger.info('Yes/No token check', {
+      userId,
+      isAdmin,
+      tokensBalance: walletBefore.tokensBalance,
+      freeYesNoRemaining: walletBefore.freeYesNoRemaining,
+    });
 
     const cards = [
       'The Fool', 'The Magician', 'The High Priestess', 'The Empress', 'The Emperor',
@@ -627,86 +514,46 @@ router.post('/yes-no', async (req: any, res) => {
     const russianCardName = getRussianCardName(randomCard);
     const imagePath = getCardImagePath(randomCard, isReversed);
 
-    // Отмечаем использование Yes/No для бесплатных пользователей ПОСЛЕ успешного получения интерпретации
-    if (!subscriptionStatus.hasSubscription && !isAdmin) {
-      await markFreeYesNoUsed(userId);
-      logger.info('Yes/No marked as used for free user', { 
-        userId: req.user.userId, 
-        telegramId: userId 
-      });
+    const consumed = await tryConsumeYesNo(userId, isAdmin);
+    if (!consumed.ok) {
+      return sendInsufficientTokens(res, consumed.required, consumed.balance);
     }
 
-    // Сохраняем расклад ТОЛЬКО для пользователей с подпиской
-    if (subscriptionStatus.hasSubscription || isAdmin) {
-      try {
-        if (interpretationText && interpretationText.trim().length > 0) {
-          logger.info('Attempting to save yes-no reading', {
-            userId: req.user.userId,
-            telegramId: userId,
-            cardName: randomCard,
-            hasInterpretation: !!interpretationText
-          });
-          
-          const saved = await openAIService.saveReading(
-            req.user.userId,
-            userId,
-            {
-              cards: [cardData],
-              question,
-              readingType: 'yesno'
-            },
-            interpretationText
-          );
-          if (!saved) {
-            logger.warn('Failed to save yes-no reading', { 
-              userId: req.user.userId, 
-              telegramId: userId,
-              cardName: randomCard
-            });
-          } else {
-            logger.info('Yes-no reading saved successfully', { 
-              userId: req.user.userId, 
-              telegramId: userId,
-              cardName: randomCard
-            });
-          }
-        } else {
-          logger.warn('Skipping save: interpretation is empty', { 
-            userId: req.user.userId, 
-            telegramId: userId 
-          });
-        }
-      } catch (saveError) {
-        logger.error('Error saving yes-no reading', { 
-          error: saveError, 
-          userId: req.user.userId, 
-          telegramId: userId,
-          errorMessage: saveError instanceof Error ? saveError.message : String(saveError)
-        });
+    try {
+      if (interpretationText && interpretationText.trim().length > 0) {
+        await openAIService.saveReading(
+          req.user.userId,
+          userId,
+          { cards: [cardData], question, readingType: 'yesno' },
+          interpretationText
+        );
       }
+    } catch (saveError) {
+      logger.error('Error saving yes-no reading', { error: saveError, userId, telegramId: userId });
     }
 
-    const subscriptionInfoYesNo = await buildSubscriptionInfoForRequest(req);
-    // Формируем ответ в формате, который ожидает фронтенд
+    const walletAfter = await buildWalletSnapshot(userId, isAdmin);
     res.json({
       success: true,
       data: {
         card: {
-          name: russianCardName, // Русское название
+          name: russianCardName,
           category: 'major',
-          isReversed: isReversed, // Добавляем информацию о перевернутости
+          isReversed: isReversed,
           uprightImage: getCardImagePath(randomCard, false),
           reversedImage: getCardImagePath(randomCard, true),
-          image: imagePath, // Добавляем поле image для совместимости
-          imagePath: imagePath, // Добавляем поле imagePath для совместимости
+          image: imagePath,
+          imagePath: imagePath,
           uprightInterpretation: isReversed ? '' : interpretationText,
-          reversedInterpretation: isReversed ? interpretationText : ''
+          reversedInterpretation: isReversed ? interpretationText : '',
         },
         answer: answer,
         interpretation: interpretationText,
-        category: 'major'
+        category: 'major',
       },
-      ...(subscriptionInfoYesNo ? { subscriptionInfo: subscriptionInfoYesNo } : {}),
+      ...attachWallet(walletAfter),
+      tokensSpent: consumed.tokensSpent,
+      usedFree: consumed.usedFree,
     });
   } catch (error) {
     logger.error('Yes/No error', { error, userId: req.user?.telegramId });
@@ -722,19 +569,7 @@ router.get('/history', async (req: any, res) => {
   try {
     const userId = req.user.telegramId;
 
-    // История доступна только подписчикам (и админу)
-    const adminTelegramId = process.env.ADMIN_TELEGRAM_ID;
-    const isAdmin = adminTelegramId && userId.toString() === adminTelegramId.toString();
-    const subscriptionStatus = await checkSubscriptionStatus(userId);
-    if (!subscriptionStatus.hasSubscription && !isAdmin) {
-      return res.status(403).json({
-        success: false,
-        error: 'Reading history is available only for subscribers.',
-        subscriptionRequired: true
-      });
-    }
-
-    // Увеличиваем лимит по умолчанию до 50, чтобы показывать больше записей
+    // История доступна всем авторизованным пользователям
     const { page = 1, limit = 50 } = req.query;
     
     logger.info('Fetching history', {
@@ -1049,36 +884,23 @@ router.get('/history', async (req: any, res) => {
   }
 });
 
-// Получить статус подписки (для фронтенда)
-router.get('/subscription-status', async (req: any, res) => {
+// Wallet / token status for frontend
+async function handleWalletStatus(req: any, res: any) {
   try {
-    const start = Date.now();
     const userId = req.user.telegramId;
-
-    logger.info('Subscription status check', { userId });
-
-    const subscriptionInfo = await buildSubscriptionInfoForRequest(req);
-    if (!subscriptionInfo) {
-      return res.status(401).json({
-        success: false,
-        error: 'User not found',
-      });
+    const walletInfo = await buildWalletInfoForRequest(req);
+    if (!walletInfo) {
+      return res.status(401).json({ success: false, error: 'User not found' });
     }
-
-    logger.info('Subscription status response sent', { userId, durationMs: Date.now() - start });
-
-    res.json({
-      success: true,
-      subscriptionInfo,
-    });
+    res.json({ success: true, walletInfo, tokensBalance: walletInfo.tokensBalance });
   } catch (error) {
-    logger.error('Subscription status error', { error, userId: req.user?.telegramId });
-    res.status(500).json({
-      success: false,
-      error: 'Internal server error'
-    });
+    logger.error('Wallet status error', { error, userId: req.user?.telegramId });
+    res.status(500).json({ success: false, error: 'Internal server error' });
   }
-});
+}
+
+router.get('/wallet-status', handleWalletStatus);
+router.get('/subscription-status', handleWalletStatus);
 
 // Уточняющий вопрос для расклада
 // Поддерживаем оба пути для обратной совместимости

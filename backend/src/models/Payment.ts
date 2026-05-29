@@ -4,10 +4,14 @@ export interface IPayment extends Document {
   paymentId: string;
   userId: string;
   status: 'pending' | 'succeeded' | 'canceled';
+  /** @deprecated legacy subscription flag */
   subscriptionActivated: boolean;
-  processed: boolean; // идемпотентность webhook — обработан только 1 раз
+  tokensCredited: boolean;
+  processed: boolean;
+  /** @deprecated legacy subscription plan id */
   plan?: string;
-  returnRef?: string; // ref из return_url для lookup после редиректа
+  tokenPackage?: string;
+  returnRef?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -33,12 +37,20 @@ const PaymentSchema = new Schema<IPayment>({
     type: Boolean,
     default: false,
   },
+  tokensCredited: {
+    type: Boolean,
+    default: false,
+  },
   processed: {
     type: Boolean,
     default: false,
     index: true,
   },
   plan: {
+    type: String,
+    default: null,
+  },
+  tokenPackage: {
     type: String,
     default: null,
   },
@@ -51,9 +63,6 @@ const PaymentSchema = new Schema<IPayment>({
   timestamps: true,
 });
 
-PaymentSchema.index({ paymentId: 1 });
 PaymentSchema.index({ userId: 1, createdAt: -1 });
-PaymentSchema.index({ returnRef: 1 });
-PaymentSchema.index({ processed: 1 });
 
 export const Payment = mongoose.model<IPayment>('Payment', PaymentSchema);

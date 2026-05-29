@@ -4,13 +4,14 @@ import rateLimit from 'express-rate-limit';
 import { PostHog } from 'posthog-node';
 import { authenticateToken } from '../middleware/auth';
 import { verifyYooKassaWebhook } from '../middleware/verifyYooKassaSignature';
-import { checkSubscriptionStatus, activateSubscription } from '../utils/subscription';
-import { YooKassaService, SUBSCRIPTION_PLANS } from '../services/yookassa';
+import { YooKassaService, TOKEN_PACKAGES } from '../services/yookassa';
 import { Payment } from '../models/Payment';
+import { creditTokenPackage } from '../utils/tokens';
+import { isTokenPackageId } from '../constants/tokens';
 import logger from '../utils/logger';
 
 const posthog = new PostHog('phc_pA7Aai2zies44X8G3ebVUTQii7DmCRxt26Cww33HPsN3', {
-  host: 'https://app.posthog.com',
+  host: 'https://eu.i.posthog.com',
   flushAt: 1,
   flushInterval: 0,
 });
@@ -33,8 +34,6 @@ const paymentLimiter = rateLimit({
   message: { success: false, error: 'Too many payment requests, please try again later' },
 });
 
-// Webhook YooKassa — БЕЗ JWT (server-to-server), IP whitelist + проверка статуса через API
-// Идемпотентность: атомарный findOneAndUpdate по processed: false
 router.post('/webhook', webhookLimiter, verifyYooKassaWebhook, async (req, res) => {
   try {
     const { event, object: paymentData } = req.body;
@@ -49,7 +48,6 @@ router.post('/webhook', webhookLimiter, verifyYooKassaWebhook, async (req, res) 
       return res.status(200).json({ status: 'ok', message: 'Event ignored' });
     }
 
-    // Проверка 2: подтверждаем статус платежа через API YooKassa (защита от подделки)
     const yooKassa = new YooKassaService(
       process.env.YOOKASSA_SHOP_ID || '',
       process.env.YOOKASSA_SECRET_KEY || ''
@@ -65,13 +63,12 @@ router.post('/webhook', webhookLimiter, verifyYooKassaWebhook, async (req, res) 
       return res.status(200).json({ status: 'ok', message: 'Payment not confirmed' });
     }
 
-    // Атомарное обновление: только если processed: false (избегаем race condition)
     const payment = await Payment.findOneAndUpdate(
       { paymentId, processed: false },
       {
         $set: {
           status: 'succeeded',
-          subscriptionActivated: true,
+          tokensCredited: true,
           processed: true,
         },
       },
@@ -83,41 +80,36 @@ router.post('/webhook', webhookLimiter, verifyYooKassaWebhook, async (req, res) 
       return res.status(200).json({ status: 'ok', message: 'Already processed' });
     }
 
-    // Активируем подписку — статус подтверждён через API
     const metadata = verifiedPayment.metadata || paymentData.metadata;
-    if (metadata?.userId && metadata?.plan) {
-      const userId = parseInt(metadata.userId);
-      const plan = metadata.plan as keyof typeof SUBSCRIPTION_PLANS;
+    const packageRaw = metadata?.tokenPackage || payment.tokenPackage;
+    const userId = parseInt(metadata?.userId || payment.userId, 10);
 
-      if (userId && SUBSCRIPTION_PLANS[plan]) {
-        const durationDays = SUBSCRIPTION_PLANS[plan].duration;
-        const success = await activateSubscription(userId, durationDays);
+    if (userId && packageRaw && isTokenPackageId(String(packageRaw))) {
+      const packageId = String(packageRaw) as import('../constants/tokens').TokenPackageId;
+      const pkg = TOKEN_PACKAGES[packageId];
+      const newBalance = await creditTokenPackage(userId, packageId);
 
-        if (success) {
-          logger.info('Subscription activated via webhook', {
-            userId,
-            plan,
+      if (newBalance != null) {
+        logger.info('Tokens credited via webhook', {
+          userId,
+          tokenPackage: packageId,
+          paymentId,
+          amount: paymentData.amount?.value,
+          tokensBalance: newBalance,
+        });
+
+        posthog.capture({
+          distinctId: String(userId),
+          event: 'tokens_purchased',
+          properties: {
+            package: pkg.tokens,
+            amount: Number(paymentData.amount?.value || pkg.price),
+            currency: paymentData.amount?.currency || 'RUB',
             paymentId,
-            amount: paymentData.amount?.value,
-          });
-
-          posthog.capture({
-            distinctId: String(userId),
-            event: 'subscription_paid',
-            properties: {
-              amount: paymentData.amount?.value,
-              currency: paymentData.amount?.currency || 'RUB',
-              plan,
-              paymentId,
-            },
-          });
-        } else {
-          logger.error('Failed to activate subscription via webhook', {
-            userId,
-            plan,
-            paymentId,
-          });
-        }
+          },
+        });
+      } else {
+        logger.error('Failed to credit tokens via webhook', { userId, packageId, paymentId });
       }
     }
 
@@ -128,38 +120,18 @@ router.post('/webhook', webhookLimiter, verifyYooKassaWebhook, async (req, res) 
   }
 });
 
-// Middleware для остальных маршрутов (требуют JWT)
 router.use(authenticateToken);
 
-// Получить статус подписки
-router.get('/status', async (req: any, res) => {
-  try {
-    const userId = req.user.telegramId;
-    const subscriptionStatus = await checkSubscriptionStatus(userId);
-    
-    res.json({
-      success: true,
-      subscription: subscriptionStatus
-    });
-  } catch (error) {
-    logger.error('Subscription status error', { error, userId: req.user?.telegramId });
-    res.status(500).json({
-      success: false,
-      error: 'Internal server error'
-    });
-  }
-});
-
-// Создать платеж для подписки
 router.post('/create-payment', paymentLimiter, async (req: any, res) => {
   try {
     const userId = req.user.telegramId;
-    const { plan } = req.body;
-    
-    if (!plan || !SUBSCRIPTION_PLANS[plan as keyof typeof SUBSCRIPTION_PLANS]) {
+    const { tokenPackage } = req.body;
+    const packageId = String(tokenPackage ?? '');
+
+    if (!isTokenPackageId(packageId)) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid subscription plan'
+        error: 'Invalid token package',
       });
     }
 
@@ -168,15 +140,13 @@ router.post('/create-payment', paymentLimiter, async (req: any, res) => {
       process.env.YOOKASSA_SECRET_KEY || ''
     );
 
-    // ref в return_url — payment.id от YooKassa приходит только после создания,
-    // поэтому используем ref для lookup после редиректа
     const returnRef = randomUUID();
     const returnUrl = `${process.env.FRONTEND_URL}/payment-result?paymentId=${returnRef}`;
     const cancelUrl = `${process.env.FRONTEND_URL}/payment/cancel`;
 
-    const payment = await yooKassa.createPayment(
+    const payment = await yooKassa.createTokenPayment(
       userId.toString(),
-      plan as keyof typeof SUBSCRIPTION_PLANS,
+      packageId,
       returnUrl,
       cancelUrl
     );
@@ -184,7 +154,7 @@ router.post('/create-payment', paymentLimiter, async (req: any, res) => {
     if (!payment) {
       return res.status(500).json({
         success: false,
-        error: 'Failed to create payment'
+        error: 'Failed to create payment',
       });
     }
 
@@ -194,9 +164,9 @@ router.post('/create-payment', paymentLimiter, async (req: any, res) => {
         paymentId: payment.id,
         userId: userId.toString(),
         status: 'pending',
-        subscriptionActivated: false,
+        tokensCredited: false,
         processed: false,
-        plan,
+        tokenPackage: packageId,
         returnRef,
       },
       { upsert: true, new: true }
@@ -210,38 +180,35 @@ router.post('/create-payment', paymentLimiter, async (req: any, res) => {
         confirmationUrl: payment.confirmation.confirmation_url,
         amount: payment.amount.value,
         currency: payment.amount.currency,
-        description: payment.description
-      }
+        description: payment.description,
+        tokenPackage: packageId,
+      },
     });
   } catch (error) {
-    logger.error('Create payment error', { error, userId: req.user?.telegramId });
+    logger.error('Create token payment error', { error, userId: req.user?.telegramId });
     res.status(500).json({
       success: false,
-      error: 'Internal server error'
+      error: 'Internal server error',
     });
   }
 });
 
-// Получить доступные планы подписки
-router.get('/plans', (req, res) => {
+router.get('/packages', (_req, res) => {
   try {
-    const plans = Object.entries(SUBSCRIPTION_PLANS).map(([key, plan]) => ({
-      id: key,
-      name: plan.name,
-      price: plan.price,
-      duration: plan.duration,
-      currency: 'RUB'
+    const packages = Object.entries(TOKEN_PACKAGES).map(([id, pkg]) => ({
+      id,
+      tokens: pkg.tokens,
+      name: pkg.name,
+      price: pkg.price,
+      currency: 'RUB',
     }));
 
-    res.json({
-      success: true,
-      plans
-    });
+    res.json({ success: true, packages });
   } catch (error) {
-    logger.error('Get plans error', { error });
+    logger.error('Get token packages error', { error });
     res.status(500).json({
       success: false,
-      error: 'Internal server error'
+      error: 'Internal server error',
     });
   }
 });

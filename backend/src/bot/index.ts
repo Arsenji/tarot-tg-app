@@ -4,9 +4,10 @@ import { User } from '../models/User';
 import { SupportMessage } from '../models/SupportMessage';
 import { Review } from '../models/Review';
 import { Payment } from '../models/Payment';
-import { checkSubscriptionStatus } from '../utils/subscription';
+import { buildWalletSnapshot, creditTokenPackage } from '../utils/tokens';
+import { TOKEN_PACKAGES, TokenPackageId } from '../constants/tokens';
 import logger from '../utils/logger';
-import { YooKassaService, SUBSCRIPTION_PLANS } from '../services/yookassa';
+import { YooKassaService } from '../services/yookassa';
 
 // Интерфейс для состояний пользователя
 interface UserState {
@@ -27,11 +28,21 @@ let isBotRunning = false;
 // Переменная для YooKassa (инициализируется в startBot)
 let yooKassa: YooKassaService;
 
+async function formatWalletMessage(telegramId: number): Promise<string> {
+  const wallet = await buildWalletSnapshot(telegramId, false);
+  if (!wallet) return '🪙 Баланс: 0 токенов';
+  return (
+    `🪙 Баланс: ${wallet.tokensBalance} токенов\n` +
+    `❓ Бесплатных «Да/Нет»: ${wallet.freeYesNoRemaining}/3\n` +
+    `🔮 Бесплатных «3 карты»: ${wallet.freeThreeCardsRemaining}/3`
+  );
+}
+
 // Клавиатуры
 const getMainKeyboard = () => {
   return Markup.keyboard([
     ['Открыть приложение'],
-    ['Купить подписку', 'Моя подписка'],
+    ['Купить токены', 'Мой баланс'],
     ['Помощь', 'Оставить отзыв']
   ]).resize();
 };
@@ -40,33 +51,14 @@ const getStartKeyboard = () => {
   return Markup.keyboard([['Начать']]).resize();
 };
 
-const getSubscriptionKeyboard = () => {
-  return Markup.inlineKeyboard([
-    [
-      Markup.button.callback(
-        `${SUBSCRIPTION_PLANS.weekly.name} - ${SUBSCRIPTION_PLANS.weekly.price}₽`,
-        'plan_weekly'
-      )
-    ],
-    [
-      Markup.button.callback(
-        `${SUBSCRIPTION_PLANS.monthly.name} - ${SUBSCRIPTION_PLANS.monthly.price}₽`,
-        'plan_monthly'
-      )
-    ],
-    [
-      Markup.button.callback(
-        `${SUBSCRIPTION_PLANS.quarterly.name} - ${SUBSCRIPTION_PLANS.quarterly.price}₽`,
-        'plan_quarterly'
-      )
-    ],
-    [
-      Markup.button.callback(
-        `${SUBSCRIPTION_PLANS.yearly.name} - ${SUBSCRIPTION_PLANS.yearly.price}₽`,
-        'plan_yearly'
-      )
-    ]
+const getTokenKeyboard = () => {
+  const rows = (Object.keys(TOKEN_PACKAGES) as TokenPackageId[]).map((id) => [
+    Markup.button.callback(
+      `${TOKEN_PACKAGES[id].name} — ${TOKEN_PACKAGES[id].price}₽`,
+      `token_${id}`
+    ),
   ]);
+  return Markup.inlineKeyboard(rows);
 };
 
 const getBackKeyboard = () => {
@@ -121,7 +113,9 @@ const initializeBot = () => {
             username: ctx.from?.username || '',
             languageCode: ctx.from?.language_code || 'ru',
             subscriptionStatus: 0,
-            freeYesNoUsed: false
+            tokensBalance: 0,
+            freeYesNoUsed: 0,
+            freeThreeCardsUsed: 0,
           },
           { upsert: true, new: true }
         );
@@ -132,28 +126,15 @@ const initializeBot = () => {
       }
 
       try {
-        // Получаем информацию о подписке
-        const subscriptionStatus = await checkSubscriptionStatus(userId);
-        
-        // Формируем приветственное сообщение
+        const walletLine = await formatWalletMessage(userId);
         let welcomeMessage = '🔮 Добро пожаловать в Таро-бот!\n\n' +
-          'Я помогу вам получить ответы на важные вопросы с помощью карт Таро.\n' +
-          'Мой искусственный интеллект был специально обучен опытными тарологами, поэтому каждое предсказание максимально приближено и ничем не отличается от настоящей консультации.\n\n';
-        
-        // Добавляем информацию о подписке
-        if (subscriptionStatus.hasSubscription && !subscriptionStatus.isExpired) {
-          const expiresAt = subscriptionStatus.expiresAt 
-            ? new Date(subscriptionStatus.expiresAt).toLocaleDateString('ru-RU')
-            : 'Неизвестно';
-          welcomeMessage += `✅ У вас активная подписка до ${expiresAt}\n\n`;
-        } else {
-          welcomeMessage += '🎁 В бесплатном доступе:\n' +
-            '🃏 «Совет дня» — 1 раз каждый день\n' +
-            '❓ 1 вопрос «Да / Нет»\n' +
-            '🔮 1 расклад на 3 карты\n\n';
-        }
-        
-        welcomeMessage += 'Выберите действие:';
+          'Я помогу вам получить ответы на важные вопросы с помощью карт Таро.\n\n' +
+          `${walletLine}\n\n` +
+          '🎁 «Совет дня» — бесплатно 1 раз в сутки\n' +
+          '❓ «Да / Нет» — 5 токенов (3 бесплатных для новых)\n' +
+          '🔮 «3 карты» — 10 токенов (3 бесплатных для новых)\n' +
+          '📚 История раскладов — доступна всем в приложении\n\n' +
+          'Выберите действие:';
         
         // Сразу показываем главное меню
         await ctx.reply(welcomeMessage, getMainKeyboard());
@@ -193,46 +174,19 @@ const initializeBot = () => {
     }
   });
 
-  // Команда /subscription
-  bot.command('subscription', async (ctx: Context) => {
+  bot.command('balance', async (ctx: Context) => {
     try {
       const userId = ctx.from?.id;
       if (!userId) return;
-
-      const user = await User.findOne({ telegramId: userId });
-      if (!user) {
-        await ctx.reply('Пользователь не найден. Используйте /start для регистрации.');
-        return;
-      }
-
-      const subscriptionStatus = await checkSubscriptionStatus(userId);
-      
-      if (subscriptionStatus.hasSubscription && !subscriptionStatus.isExpired) {
-        const expiresAt = subscriptionStatus.expiresAt 
-          ? new Date(subscriptionStatus.expiresAt).toLocaleDateString('ru-RU')
-          : 'Неизвестно';
-        
-        await ctx.reply(
-          `✅ У вас активная подписка!\n\n` +
-          `📅 Действует до: ${expiresAt}\n\n` +
-          `💎 Вы можете использовать все функции бота без ограничений.`,
-          getMainKeyboard()
-        );
-      } else {
-        await ctx.reply(
-          `❌ У вас нет активной подписки.\n\n` +
-          `🎁 В бесплатном доступе:\n` +
-          `🃏 «Совет дня» — 1 раз каждый день\n` +
-          `❓ 1 вопрос «Да / Нет»\n` +
-          `🔮 1 расклад на 3 карты\n\n` +
-          `💳 Нажмите «Купить подписку» для получения полного доступа.`,
-          getMainKeyboard()
-        );
-      }
+      await ctx.reply(await formatWalletMessage(userId), getMainKeyboard());
     } catch (error) {
-      logger.error('Error in /subscription command', { error, userId: ctx.from?.id });
+      logger.error('Error in /balance command', { error, userId: ctx.from?.id });
       await ctx.reply('Произошла ошибка. Попробуйте позже.');
     }
+  });
+
+  bot.command('subscription', async (ctx: Context) => {
+    await ctx.reply('Подписки больше нет — используйте токены. Команда /balance покажет баланс.', getMainKeyboard());
   });
 
   // Обработка кнопки "Открыть приложение"
@@ -247,19 +201,8 @@ const initializeBot = () => {
         return;
       }
 
-      const subscriptionInfo = await checkSubscriptionStatus(user.telegramId);
-
-      let message = '🎉 Отлично! Теперь у вас есть доступ к веб-приложению.\n\n';
-      
-      if (subscriptionInfo.hasSubscription) {
-        message += '✅ У вас активная подписка — доступны все функции!\n\n';
-      } else {
-        message += '🎁 В бесплатном доступе:\n' +
-          '🃏 «Совет дня» — 1 раз каждый день\n' +
-          '❓ 1 вопрос «Да / Нет»\n' +
-          '🔮 1 расклад на 3 карты\n\n';
-      }
-
+      const walletLine = await formatWalletMessage(user.telegramId);
+      let message = '🎉 Отлично! Теперь у вас есть доступ к веб-приложению.\n\n' + walletLine + '\n\n';
       const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
       const webAppUrl = `${frontendUrl}?tgWebAppStartParam=${userId}`;
 
@@ -287,21 +230,8 @@ const initializeBot = () => {
         return;
       }
 
-      const subscriptionInfo = await checkSubscriptionStatus(user.telegramId);
-
-      let message = '🎉 Отлично! Теперь у вас есть доступ к веб-приложению.\n\n';
-      
-      if (subscriptionInfo.hasSubscription) {
-        message += '✅ У вас активная подписка - полный доступ ко всем функциям!\n\n';
-      } else {
-        message += '📱 Доступные функции:\n';
-        message += '• Одна карта "Да/Нет" (бесплатно, 1 раз)\n';
-        message += '• Совет дня (1 раз в день)\n';
-        message += '• История раскладов (последние 3)\n\n';
-        message += '💎 Для полного доступа оформите подписку!';
-      }
-
-      message += '\n\nВыберите действие:';
+      const walletLine = await formatWalletMessage(user.telegramId);
+      let message = '🎉 Отлично! Теперь у вас есть доступ к веб-приложению.\n\n' + walletLine + '\n\nВыберите действие:';
 
       await ctx.reply(message, getMainKeyboard());
     } catch (error) {
@@ -310,232 +240,92 @@ const initializeBot = () => {
     }
   });
 
-  // Обработка кнопки "Купить подписку"
-  bot.hears('Купить подписку', async (ctx: Context) => {
-    try {
-      const userId = ctx.from?.id;
-      if (!userId) return;
+  const showTokenPackages = async (ctx: Context) => {
+    let message = '🪙 Выберите пакет токенов:\n\n';
+    (Object.keys(TOKEN_PACKAGES) as TokenPackageId[]).forEach((id) => {
+      const pkg = TOKEN_PACKAGES[id];
+      message += `📦 ${pkg.name} — ${pkg.price}₽\n`;
+    });
+    message += '\nНажмите на пакет для покупки:';
+    await ctx.reply(message, getTokenKeyboard());
+  };
 
-      const user = await User.findOne({ telegramId: userId });
-      if (!user) {
-        await ctx.reply('Сначала выполните команду /start');
-        return;
-      }
+  bot.hears('Купить токены', showTokenPackages);
+  bot.hears('Купить подписку', showTokenPackages);
 
-      const subscriptionInfo = await checkSubscriptionStatus(user.telegramId);
-
-      if (subscriptionInfo.hasSubscription) {
-        await ctx.reply(
-          '✅ У вас уже есть активная подписка!\n\n' +
-          'Используйте команду "Моя подписка" для просмотра информации.',
-          getMainKeyboard()
-        );
-        return;
-      }
-
-      let message = '💎 Выберите тариф подписки:\n\n';
-      
-      Object.values(SUBSCRIPTION_PLANS).forEach(plan => {
-        message += `📦 ${plan.name}\n`;
-        message += `💰 ${plan.price}₽\n`;
-        message += `📅 ${plan.duration} дней\n`;
-        message += `📝 ${plan.name}\n\n`;
-      });
-
-      message += 'Нажмите на тариф для покупки:';
-
-      await ctx.reply(message, getSubscriptionKeyboard());
-    } catch (error) {
-      logger.error('Error in "Купить подписку" handler', { error, userId: ctx.from?.id });
-      await ctx.reply('Произошла ошибка. Попробуйте позже.');
-    }
+  bot.hears('Мой баланс', async (ctx: Context) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+    await ctx.reply(await formatWalletMessage(userId), getMainKeyboard());
+  });
+  bot.hears('Моя подписка', async (ctx: Context) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+    await ctx.reply(await formatWalletMessage(userId), getMainKeyboard());
   });
 
-  // Обработка выбора тарифа
-  bot.action(/^plan_(weekly|monthly|quarterly|yearly)$/, async (ctx: Context) => {
+  bot.action(/^token_(10|25|50|100)$/, async (ctx: Context) => {
     try {
       const userId = ctx.from?.id;
       if (!userId) return;
 
       const callbackData = ctx.callbackQuery && 'data' in ctx.callbackQuery ? ctx.callbackQuery.data : '';
-      const match = callbackData.match(/^plan_(weekly|monthly|quarterly|yearly)$/);
+      const match = callbackData.match(/^token_(10|25|50|100)$/);
       if (!match) return;
-      
-      const planType = match[1] as 'weekly' | 'monthly' | 'quarterly' | 'yearly';
-      const plan = SUBSCRIPTION_PLANS[planType];
 
-      const user = await User.findOne({ telegramId: userId });
-      if (!user) return;
+      const packageId = match[1] as TokenPackageId;
+      const pkg = TOKEN_PACKAGES[packageId];
 
-      // Проверяем, настроена ли Юкасса
-      const isYooKassaConfigured = process.env.YOOKASSA_SHOP_ID && 
+      const isYooKassaConfigured = process.env.YOOKASSA_SHOP_ID &&
         process.env.YOOKASSA_SHOP_ID !== 'your_yookassa_shop_id' &&
-        process.env.YOOKASSA_SHOP_ID !== 'test_shop_id' &&
-        process.env.YOOKASSA_SECRET_KEY && 
-        process.env.YOOKASSA_SECRET_KEY !== 'your_yookassa_secret_key' &&
-        process.env.YOOKASSA_SECRET_KEY !== 'test_secret_key';
+        process.env.YOOKASSA_SECRET_KEY &&
+        process.env.YOOKASSA_SECRET_KEY !== 'your_yookassa_secret_key';
 
       if (!isYooKassaConfigured) {
-        // Демо-режим: сразу активируем подписку
-        const now = new Date();
-        let expiryDate: Date;
-        
-        if (user.subscriptionStatus === 1 && user.subscriptionExpiresAt && user.subscriptionExpiresAt > now) {
-          // Если подписка активна - продлеваем (суммируем сроки)
-          expiryDate = new Date(user.subscriptionExpiresAt.getTime() + (plan.duration * 24 * 60 * 60 * 1000));
-        } else {
-          // Если подписки нет или она истекла - создаем новую
-          expiryDate = new Date(now.getTime() + (plan.duration * 24 * 60 * 60 * 1000));
-        }
-
-        const isRenewal = user.subscriptionStatus === 1 && user.subscriptionExpiresAt && user.subscriptionExpiresAt > now;
-        
-        user.subscriptionStatus = 1;
-        user.subscriptionExpiresAt = expiryDate;
-        await user.save();
-        
-        await ctx.answerCbQuery(isRenewal ? '✅ Подписка продлена! (Тест)' : '✅ Подписка активирована! (Тест)');
+        const balance = await creditTokenPackage(userId, packageId);
+        await ctx.answerCbQuery('✅ Токены начислены (тест)');
         await ctx.editMessageText(
-          `✅ Подписка "${plan.name}" ${isRenewal ? 'продлена' : 'активирована'}!\n\n` +
-          `💰 Сумма: ${plan.price}₽\n` +
-          `📅 Добавлено: ${plan.duration} дней\n` +
-          `📆 Действует до: ${expiryDate.toLocaleDateString('ru-RU')}\n\n` +
-          `🎉 Теперь у вас есть полный доступ ко всем функциям!\n\n` +
-          `🧪 Это тестовый режим. Платеж не был проведен.`,
-          Markup.inlineKeyboard([
-            [Markup.button.callback('Вернуться в меню', 'back_to_menu')]
-          ])
+          `✅ Начислено ${pkg.tokens} токенов (тестовый режим)\n\n` +
+          `🪙 Баланс: ${balance ?? 0} токенов`,
+          Markup.inlineKeyboard([[Markup.button.callback('Вернуться в меню', 'back_to_menu')]])
         );
-
-        logger.info('Test subscription activated', {
-          userId,
-          planType,
-          amount: plan.price,
-          expiryDate: expiryDate.toISOString()
-        });
-
         return;
       }
 
-      // Реальный режим с Юкассой
-      try {
-        const returnRef = randomUUID();
-        const returnUrl = `${process.env.FRONTEND_URL}/payment-result?paymentId=${returnRef}`;
-        const payment = await yooKassa.createPayment(
-          userId.toString(),
-          planType,
-          returnUrl
-        );
+      const returnRef = randomUUID();
+      const returnUrl = `${process.env.FRONTEND_URL}/payment-result?paymentId=${returnRef}`;
+      const payment = await yooKassa.createTokenPayment(userId.toString(), packageId, returnUrl);
 
-        if (!payment) {
-          await ctx.answerCbQuery('Ошибка создания платежа');
-          return;
-        }
-
-        await Payment.findOneAndUpdate(
-          { paymentId: payment.id },
-          {
-            paymentId: payment.id,
-            userId: userId.toString(),
-            status: 'pending',
-            subscriptionActivated: false,
-            processed: false,
-            plan: planType,
-            returnRef,
-          },
-          { upsert: true, new: true }
-        );
-
-        await ctx.answerCbQuery('Перенаправляем на оплату...');
-        await ctx.editMessageText(
-          `💳 Оплата подписки "${plan.name}"\n\n` +
-          `💰 Сумма: ${plan.price}₽\n` +
-          `📅 Срок: ${plan.duration} дней\n\n` +
-          `Нажмите кнопку ниже для перехода к оплате:`,
-          Markup.inlineKeyboard([
-            [Markup.button.url('💳 Оплатить', payment.confirmation.confirmation_url)],
-            [Markup.button.callback('❌ Отмена', 'cancel_payment')]
-          ])
-        );
-
-        logger.info('Payment created', {
-          userId,
-          planType,
-          paymentId: payment.id,
-          amount: plan.price
-        });
-
-      } catch (paymentError) {
-        logger.error('Payment creation failed', { error: paymentError, userId });
-        
+      if (!payment) {
         await ctx.answerCbQuery('Ошибка создания платежа');
-        await ctx.editMessageText(
-          `❌ Ошибка при создании платежа\n\n` +
-          `Попробуйте позже или обратитесь в поддержку.`,
-          Markup.inlineKeyboard([
-            [Markup.button.callback('Назад', 'back_to_menu')]
-          ])
-        );
-      }
-
-    } catch (error) {
-      logger.error('Error in plan selection', { error, userId: ctx.from?.id });
-      await ctx.answerCbQuery('Произошла ошибка. Попробуйте позже.');
-    }
-  });
-
-  // Обработка кнопки "Моя подписка"
-  bot.hears('Моя подписка', async (ctx: Context) => {
-    try {
-      const userId = ctx.from?.id;
-      if (!userId) return;
-
-      const user = await User.findOne({ telegramId: userId });
-      if (!user) {
-        await ctx.reply('Сначала выполните команду /start');
         return;
       }
 
-      const subscriptionInfo = await checkSubscriptionStatus(user.telegramId);
+      await Payment.findOneAndUpdate(
+        { paymentId: payment.id },
+        {
+          paymentId: payment.id,
+          userId: userId.toString(),
+          status: 'pending',
+          tokensCredited: false,
+          processed: false,
+          tokenPackage: packageId,
+          returnRef,
+        },
+        { upsert: true, new: true }
+      );
 
-      if (!subscriptionInfo.hasSubscription) {
-        await ctx.reply(
-          '❌ У вас нет активной подписки.\n\n' +
-          'Оформите подписку для получения полного доступа ко всем функциям.',
-          Markup.inlineKeyboard([
-            [Markup.button.callback('Купить подписку', 'buy_subscription')]
-          ])
-        );
-        return;
-      }
-
-      // Правильный расчет даты активации и дней
-      const now = new Date();
-      
-      // Используем текущую дату как дату активации
-      const activationDate = now;
-      
-      const daysLeft = user.subscriptionExpiresAt ? 
-        Math.max(0, Math.ceil((user.subscriptionExpiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))) : 
-        0;
-
-      const message = 
-        `📋 Информация о подписке:\n\n` +
-        `✅ Статус: Активна\n` +
-        `📅 Дата активации: ${activationDate.toLocaleDateString('ru-RU')}\n` +
-        `⏰ Осталось дней: ${daysLeft}\n` +
-        `📆 Действует до: ${user.subscriptionExpiresAt?.toLocaleDateString('ru-RU')}\n\n` +
-        `🎉 Полный доступ ко всем функциям!`;
-
-      await ctx.reply(
-        message,
+      await ctx.answerCbQuery('Перенаправляем на оплату...');
+      await ctx.editMessageText(
+        `💳 Покупка ${pkg.name}\n\n💰 ${pkg.price}₽`,
         Markup.inlineKeyboard([
-          [Markup.button.callback('Продлить подписку', 'extend_subscription')]
+          [Markup.button.url('💳 Оплатить', payment.confirmation.confirmation_url)],
+          [Markup.button.callback('❌ Отмена', 'cancel_payment')],
         ])
       );
     } catch (error) {
-      logger.error('Error in "Моя подписка" handler', { error, userId: ctx.from?.id });
-      await ctx.reply('Произошла ошибка. Попробуйте позже.');
+      logger.error('Error in token package selection', { error, userId: ctx.from?.id });
+      await ctx.answerCbQuery('Произошла ошибка');
     }
   });
 
@@ -678,18 +468,16 @@ const initializeBot = () => {
   });
 
   bot.action('buy_subscription', async (ctx: Context) => {
-    // Перенаправляем на обработчик "Купить подписку"
-    await ctx.editMessageText('💎 Выберите тариф подписки:', getSubscriptionKeyboard());
+    await ctx.editMessageText('🪙 Выберите пакет токенов:', getTokenKeyboard());
+  });
+
+  bot.action('extend_subscription', async (ctx: Context) => {
+    await ctx.editMessageText('🪙 Выберите пакет токенов:', getTokenKeyboard());
   });
 
   bot.action('cancel_payment', async (ctx: Context) => {
     await ctx.editMessageText('❌ Оплата отменена.');
     await ctx.reply('Выберите действие:', getMainKeyboard());
-  });
-
-  bot.action('extend_subscription', async (ctx: Context) => {
-    // Показываем тарифы для продления
-    await ctx.editMessageText('💎 Выберите тариф для продления:', getSubscriptionKeyboard());
   });
 
   // Обработка ошибок
