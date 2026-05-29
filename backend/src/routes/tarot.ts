@@ -16,6 +16,7 @@ import {
   WalletSnapshot,
 } from '../utils/tokens';
 import { YES_NO_TOKEN_COST, THREE_CARDS_TOKEN_COST } from '../constants/tokens';
+import { reconcilePendingPayments } from '../utils/paymentReconcile';
 import { TarotReading } from '../models/TarotReading';
 import logger from '../utils/logger';
 import { getRussianCardName, getCardImagePath } from '../utils/cardTranslations';
@@ -888,6 +889,15 @@ router.get('/history', async (req: any, res) => {
 async function handleWalletStatus(req: any, res: any) {
   try {
     const userId = req.user.telegramId;
+
+    // Сверяем неначисленные платежи с YooKassa и начисляем токены, если
+    // оплата прошла, а вебхук не дошёл. Не валим запрос при ошибке сверки.
+    try {
+      await reconcilePendingPayments(Number(userId));
+    } catch (reconcileError) {
+      logger.error('Wallet status reconcile failed', { error: reconcileError, userId });
+    }
+
     const walletInfo = await buildWalletInfoForRequest(req);
     if (!walletInfo) {
       return res.status(401).json({ success: false, error: 'User not found' });
