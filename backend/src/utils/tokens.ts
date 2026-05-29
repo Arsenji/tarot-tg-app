@@ -114,58 +114,49 @@ export async function creditTokenPackage(
 }
 
 async function consumeYesNoInternal(telegramId: number): Promise<ConsumeResult> {
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const user = await User.findOne({ telegramId });
-    if (!user) {
-      return { ok: false, code: 'INSUFFICIENT_TOKENS', required: YES_NO_TOKEN_COST, balance: 0 };
-    }
+  // 1) Атомарно тратим бесплатную попытку. Гард матчит и документы без поля
+  //    (старые пользователи, созданные до появления токенов): $inc по
+  //    отсутствующему полю трактует его как 0 и ставит 1.
+  const freeUpdated = await User.findOneAndUpdate(
+    {
+      telegramId,
+      $or: [
+        { freeYesNoUsed: { $exists: false } },
+        { freeYesNoUsed: null },
+        { freeYesNoUsed: { $lt: FREE_YES_NO_LIFETIME } },
+      ],
+    },
+    { $inc: { freeYesNoUsed: 1 } },
+    { new: true }
+  );
 
-    const used = normalizeFreeCount(user.freeYesNoUsed);
-    if (used < FREE_YES_NO_LIFETIME) {
-      const updated = await User.findOneAndUpdate(
-        { telegramId, _id: user._id, freeYesNoUsed: user.freeYesNoUsed },
-        { $set: { freeYesNoUsed: used + 1 } },
-        { new: true }
-      );
-      if (updated) {
-        return {
-          ok: true,
-          usedFree: true,
-          tokensSpent: 0,
-          tokensBalance: updated.tokensBalance ?? 0,
-          freeYesNoUsed: normalizeFreeCount(updated.freeYesNoUsed),
-          freeThreeCardsUsed: normalizeFreeCount(updated.freeThreeCardsUsed),
-        };
-      }
-      continue;
-    }
+  if (freeUpdated) {
+    return {
+      ok: true,
+      usedFree: true,
+      tokensSpent: 0,
+      tokensBalance: freeUpdated.tokensBalance ?? 0,
+      freeYesNoUsed: normalizeFreeCount(freeUpdated.freeYesNoUsed),
+      freeThreeCardsUsed: normalizeFreeCount(freeUpdated.freeThreeCardsUsed),
+    };
+  }
 
-    const balance = user.tokensBalance ?? 0;
-    if (balance < YES_NO_TOKEN_COST) {
-      return {
-        ok: false,
-        code: 'INSUFFICIENT_TOKENS',
-        required: YES_NO_TOKEN_COST,
-        balance,
-      };
-    }
+  // 2) Бесплатные исчерпаны — атомарно списываем токены.
+  const paidUpdated = await User.findOneAndUpdate(
+    { telegramId, tokensBalance: { $gte: YES_NO_TOKEN_COST } },
+    { $inc: { tokensBalance: -YES_NO_TOKEN_COST } },
+    { new: true }
+  );
 
-    const updated = await User.findOneAndUpdate(
-      { telegramId, _id: user._id, tokensBalance: { $gte: YES_NO_TOKEN_COST } },
-      { $inc: { tokensBalance: -YES_NO_TOKEN_COST } },
-      { new: true }
-    );
-
-    if (updated) {
-      return {
-        ok: true,
-        usedFree: false,
-        tokensSpent: YES_NO_TOKEN_COST,
-        tokensBalance: updated.tokensBalance ?? 0,
-        freeYesNoUsed: normalizeFreeCount(updated.freeYesNoUsed),
-        freeThreeCardsUsed: normalizeFreeCount(updated.freeThreeCardsUsed),
-      };
-    }
+  if (paidUpdated) {
+    return {
+      ok: true,
+      usedFree: false,
+      tokensSpent: YES_NO_TOKEN_COST,
+      tokensBalance: paidUpdated.tokensBalance ?? 0,
+      freeYesNoUsed: normalizeFreeCount(paidUpdated.freeYesNoUsed),
+      freeThreeCardsUsed: normalizeFreeCount(paidUpdated.freeThreeCardsUsed),
+    };
   }
 
   const user = await User.findOne({ telegramId });
@@ -178,58 +169,45 @@ async function consumeYesNoInternal(telegramId: number): Promise<ConsumeResult> 
 }
 
 async function consumeThreeCardsInternal(telegramId: number): Promise<ConsumeResult> {
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const user = await User.findOne({ telegramId });
-    if (!user) {
-      return { ok: false, code: 'INSUFFICIENT_TOKENS', required: THREE_CARDS_TOKEN_COST, balance: 0 };
-    }
+  const freeUpdated = await User.findOneAndUpdate(
+    {
+      telegramId,
+      $or: [
+        { freeThreeCardsUsed: { $exists: false } },
+        { freeThreeCardsUsed: null },
+        { freeThreeCardsUsed: { $lt: FREE_THREE_CARDS_LIFETIME } },
+      ],
+    },
+    { $inc: { freeThreeCardsUsed: 1 } },
+    { new: true }
+  );
 
-    const used = normalizeFreeCount(user.freeThreeCardsUsed);
-    if (used < FREE_THREE_CARDS_LIFETIME) {
-      const updated = await User.findOneAndUpdate(
-        { telegramId, _id: user._id, freeThreeCardsUsed: user.freeThreeCardsUsed },
-        { $set: { freeThreeCardsUsed: used + 1 } },
-        { new: true }
-      );
-      if (updated) {
-        return {
-          ok: true,
-          usedFree: true,
-          tokensSpent: 0,
-          tokensBalance: updated.tokensBalance ?? 0,
-          freeYesNoUsed: normalizeFreeCount(updated.freeYesNoUsed),
-          freeThreeCardsUsed: normalizeFreeCount(updated.freeThreeCardsUsed),
-        };
-      }
-      continue;
-    }
+  if (freeUpdated) {
+    return {
+      ok: true,
+      usedFree: true,
+      tokensSpent: 0,
+      tokensBalance: freeUpdated.tokensBalance ?? 0,
+      freeYesNoUsed: normalizeFreeCount(freeUpdated.freeYesNoUsed),
+      freeThreeCardsUsed: normalizeFreeCount(freeUpdated.freeThreeCardsUsed),
+    };
+  }
 
-    const balance = user.tokensBalance ?? 0;
-    if (balance < THREE_CARDS_TOKEN_COST) {
-      return {
-        ok: false,
-        code: 'INSUFFICIENT_TOKENS',
-        required: THREE_CARDS_TOKEN_COST,
-        balance,
-      };
-    }
+  const paidUpdated = await User.findOneAndUpdate(
+    { telegramId, tokensBalance: { $gte: THREE_CARDS_TOKEN_COST } },
+    { $inc: { tokensBalance: -THREE_CARDS_TOKEN_COST } },
+    { new: true }
+  );
 
-    const updated = await User.findOneAndUpdate(
-      { telegramId, _id: user._id, tokensBalance: { $gte: THREE_CARDS_TOKEN_COST } },
-      { $inc: { tokensBalance: -THREE_CARDS_TOKEN_COST } },
-      { new: true }
-    );
-
-    if (updated) {
-      return {
-        ok: true,
-        usedFree: false,
-        tokensSpent: THREE_CARDS_TOKEN_COST,
-        tokensBalance: updated.tokensBalance ?? 0,
-        freeYesNoUsed: normalizeFreeCount(updated.freeYesNoUsed),
-        freeThreeCardsUsed: normalizeFreeCount(updated.freeThreeCardsUsed),
-      };
-    }
+  if (paidUpdated) {
+    return {
+      ok: true,
+      usedFree: false,
+      tokensSpent: THREE_CARDS_TOKEN_COST,
+      tokensBalance: paidUpdated.tokensBalance ?? 0,
+      freeYesNoUsed: normalizeFreeCount(paidUpdated.freeYesNoUsed),
+      freeThreeCardsUsed: normalizeFreeCount(paidUpdated.freeThreeCardsUsed),
+    };
   }
 
   const user = await User.findOne({ telegramId });
