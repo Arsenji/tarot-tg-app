@@ -92,7 +92,16 @@ export async function reconcilePendingPayments(telegramId: number): Promise<numb
 
   for (const p of pending) {
     try {
-      const yp = await yooKassa.getPayment(p.paymentId);
+      let yp = await yooKassa.getPayment(p.paymentId);
+
+      // Legacy two-stage payments stuck in waiting_for_capture: capture them
+      // so they reach succeeded, then credit.
+      if (yp?.status === 'waiting_for_capture') {
+        logger.info('reconcilePendingPayments: capturing waiting_for_capture payment', { paymentId: p.paymentId });
+        const captured = await yooKassa.capturePayment(p.paymentId, yp.amount);
+        yp = captured || (await yooKassa.getPayment(p.paymentId));
+      }
+
       if (yp?.status === 'succeeded') {
         const result = await creditTokensForSucceededPayment({
           paymentId: p.paymentId,

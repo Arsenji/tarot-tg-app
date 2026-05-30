@@ -26,6 +26,7 @@ export interface PaymentRequest {
     value: string;
     currency: string;
   };
+  capture: boolean;
   confirmation: {
     type: string;
     return_url: string;
@@ -84,6 +85,9 @@ export class YooKassaService {
           value: pkg.price,
           currency: 'RUB',
         },
+        // Одностадийная оплата: платёж сразу переходит в succeeded,
+        // без ручного подтверждения (иначе зависает в waiting_for_capture).
+        capture: true,
         confirmation: {
           type: 'redirect',
           return_url: returnUrl,
@@ -169,6 +173,34 @@ export class YooKassaService {
       return response.data;
     } catch (error: any) {
       logger.error('Failed to get YooKassa payment', {
+        error: error.response?.data || error.message,
+        paymentId,
+      });
+      return null;
+    }
+  }
+
+  /**
+   * Captures a payment stuck in waiting_for_capture (legacy two-stage payments).
+   * Returns the captured payment (status should be succeeded) or null.
+   */
+  async capturePayment(paymentId: string, amount?: { value: string; currency: string }): Promise<YooKassaPayment | null> {
+    try {
+      const response: AxiosResponse<YooKassaPayment> = await axios.post(
+        `${this.baseUrl}/payments/${paymentId}/capture`,
+        amount ? { amount } : {},
+        {
+          headers: {
+            Authorization: this.getAuthHeader(),
+            'Content-Type': 'application/json',
+            'Idempotence-Key': `capture-${paymentId}`,
+          },
+        }
+      );
+      logger.info('YooKassa payment captured', { paymentId, status: response.data.status });
+      return response.data;
+    } catch (error: any) {
+      logger.error('Failed to capture YooKassa payment', {
         error: error.response?.data || error.message,
         paymentId,
       });

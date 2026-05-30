@@ -41,6 +41,13 @@ router.post('/webhook', webhookLimiter, verifyYooKassaWebhook, async (req, res) 
   try {
     const { event, object: paymentData } = req.body;
 
+    logger.info('YooKassa webhook received', {
+      event,
+      paymentId: paymentData?.id,
+      status: paymentData?.status,
+      userId: paymentData?.metadata?.userId,
+    });
+
     if (event !== 'payment.succeeded') {
       return res.status(200).json({ status: 'ok', message: 'Event ignored' });
     }
