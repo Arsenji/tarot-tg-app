@@ -111,15 +111,21 @@ const initializeBot = () => {
         await User.findOneAndUpdate(
           { telegramId: userId },
           {
-            telegramId: userId,
-            firstName: ctx.from?.first_name || '',
-            lastName: ctx.from?.last_name || '',
-            username: ctx.from?.username || '',
-            languageCode: ctx.from?.language_code || 'ru',
-            subscriptionStatus: 0,
-            tokensBalance: 0,
-            freeYesNoUsed: 0,
-            freeThreeCardsUsed: 0,
+            // Профиль обновляем всегда.
+            $set: {
+              firstName: ctx.from?.first_name || '',
+              lastName: ctx.from?.last_name || '',
+              username: ctx.from?.username || '',
+              languageCode: ctx.from?.language_code || 'ru',
+            },
+            // Баланс и счётчики бесплатных раскладов выставляем ТОЛЬКО при
+            // создании, иначе каждый /start обнулял бы токены и попытки.
+            $setOnInsert: {
+              subscriptionStatus: 0,
+              tokensBalance: 0,
+              freeYesNoUsed: 0,
+              freeThreeCardsUsed: 0,
+            },
           },
           { upsert: true, new: true }
         );
