@@ -5,7 +5,12 @@ import { SupportMessage } from '../models/SupportMessage';
 import { Review } from '../models/Review';
 import { Payment } from '../models/Payment';
 import { buildWalletSnapshot, creditTokenPackage } from '../utils/tokens';
-import { TOKEN_PACKAGES, TokenPackageId } from '../constants/tokens';
+import {
+  TOKEN_PACKAGES,
+  TokenPackageId,
+  FREE_YES_NO_LIFETIME,
+  FREE_THREE_CARDS_LIFETIME,
+} from '../constants/tokens';
 import {
   reconcilePendingPayments,
   getPaymentReturnUrl,
@@ -37,8 +42,8 @@ async function formatWalletMessage(telegramId: number): Promise<string> {
   if (!wallet) return '🪙 Баланс: 0 токенов';
   return (
     `🪙 Баланс: ${wallet.tokensBalance} токенов\n` +
-    `❓ Бесплатных «Да/Нет»: ${wallet.freeYesNoRemaining}/3\n` +
-    `🔮 Бесплатных «3 карты»: ${wallet.freeThreeCardsRemaining}/3`
+    `❓ Бесплатных «Да/Нет»: ${wallet.freeYesNoRemaining}/${FREE_YES_NO_LIFETIME}\n` +
+    `🔮 Бесплатных «3 карты»: ${wallet.freeThreeCardsRemaining}/${FREE_THREE_CARDS_LIFETIME}`
   );
 }
 
@@ -158,8 +163,8 @@ const initializeBot = () => {
           'Я помогу вам получить ответы на важные вопросы с помощью карт Таро.\n\n' +
           `${walletLine}\n\n` +
           '🎁 «Совет дня» — бесплатно 1 раз в сутки\n' +
-          '❓ «Да / Нет» — 5 токенов (3 бесплатных для новых)\n' +
-          '🔮 «3 карты» — 10 токенов (3 бесплатных для новых)\n' +
+          `❓ «Да / Нет» — 5 токенов (${FREE_YES_NO_LIFETIME} бесплатный для новых)\n` +
+          `🔮 «3 карты» — 10 токенов (${FREE_THREE_CARDS_LIFETIME} бесплатный для новых)\n` +
           '📚 История раскладов — доступна всем в приложении\n\n' +
           'Выберите действие:';
         
