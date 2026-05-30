@@ -6,7 +6,7 @@ export const THREE_CARDS_TOKEN_COST = 10;
 export const TOKEN_PACKAGES = {
   '10': {
     tokens: 10,
-    price: '1.00', // TODO: вернуть 100.00 после тестов
+    price: '100.00',
     name: '10 токенов',
   },
   '25': {

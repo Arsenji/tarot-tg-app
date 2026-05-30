@@ -104,7 +104,6 @@ app.get('/', (req, res) => {
   res.json({
     message: 'Tarot Telegram App Backend',
     version: '1.0.0',
-    commit: process.env.RENDER_GIT_COMMIT || 'unknown',
     status: 'running',
     timestamp: new Date().toISOString()
   });
