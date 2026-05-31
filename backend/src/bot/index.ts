@@ -22,6 +22,64 @@ import { YooKassaService } from '../services/yookassa';
 interface UserState {
   waitingForHelp?: boolean;
   waitingForReview?: boolean;
+  // Рассылка (только для администратора)
+  broadcast?: {
+    stage: 'awaiting_message' | 'awaiting_confirm';
+    fromChatId?: number;
+    messageId?: number;
+  };
+}
+
+function isAdmin(userId: number | undefined): boolean {
+  return !!userId && !!ADMIN_ID && String(userId) === String(ADMIN_ID);
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Рассылает (копирует) сообщение всем пользователям бота с троттлингом,
+ * чтобы не упереться в лимиты Telegram (~30 сообщений/сек).
+ * Заблокировавшие бота (403) и недоступные чаты просто пропускаются.
+ */
+async function runBroadcast(
+  fromChatId: number,
+  messageId: number,
+  onProgress?: (sent: number, total: number) => Promise<void>
+): Promise<{ total: number; sent: number; blocked: number; failed: number }> {
+  const users = await User.find({}).select('telegramId').lean();
+  const total = users.length;
+  let sent = 0;
+  let blocked = 0;
+  let failed = 0;
+
+  for (let i = 0; i < users.length; i++) {
+    const telegramId = users[i].telegramId;
+    try {
+      await bot.telegram.copyMessage(telegramId, fromChatId, messageId);
+      sent++;
+    } catch (err: any) {
+      const code = err?.response?.error_code;
+      const desc = String(err?.response?.description || err?.message || '');
+      // 403 — пользователь заблокировал бота; 400 chat not found — удалён.
+      if (code === 403 || /blocked|deactivated|chat not found|user is deactivated/i.test(desc)) {
+        blocked++;
+      } else {
+        failed++;
+        logger.warn('Broadcast: failed to deliver', { telegramId, code, desc });
+      }
+    }
+
+    // ~20 сообщений/сек.
+    await delay(50);
+
+    if (onProgress && (i + 1) % 25 === 0) {
+      await onProgress(sent + blocked + failed, total).catch(() => {});
+    }
+  }
+
+  return { total, sent, blocked, failed };
 }
 
 // Хранилище состояний пользователей (в продакшене лучше использовать Redis)
@@ -226,6 +284,35 @@ const initializeBot = () => {
     await ctx.reply('Подписки больше нет — используйте токены. Команда /balance покажет баланс.', getMainKeyboard());
   });
 
+  // Рассылка всем пользователям (только администратор)
+  bot.command('broadcast', async (ctx: Context) => {
+    try {
+      const userId = ctx.from?.id;
+      if (!isAdmin(userId)) {
+        return; // Игнорируем команду для не-администраторов
+      }
+
+      userStates.set(userId!, { broadcast: { stage: 'awaiting_message' } });
+      await ctx.reply(
+        '📢 Рассылка\n\n' +
+        'Пришлите сообщение, которое нужно разослать всем пользователям бота ' +
+        '(текст с форматированием, эмодзи и т.д.).\n\n' +
+        'Я покажу предпросмотр и попрошу подтверждение перед отправкой.\n' +
+        'Для отмены отправьте /cancel.'
+      );
+    } catch (error) {
+      logger.error('Error in /broadcast command', { error, userId: ctx.from?.id });
+    }
+  });
+
+  // Отмена текущего действия (в т.ч. рассылки)
+  bot.command('cancel', async (ctx: Context) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+    userStates.delete(userId);
+    await ctx.reply('Действие отменено.', getMainKeyboard());
+  });
+
   // Обработка кнопки "Открыть приложение"
   bot.hears('Открыть приложение', async (ctx: Context) => {
     try {
@@ -420,6 +507,29 @@ const initializeBot = () => {
 
       const userState = userStates.get(userId);
 
+      // Захват сообщения для рассылки (только администратор)
+      if (isAdmin(userId) && userState?.broadcast?.stage === 'awaiting_message') {
+        const chatId = ctx.chat?.id;
+        const msgId = ctx.message?.message_id;
+        if (chatId == null || msgId == null) return;
+
+        userStates.set(userId, {
+          broadcast: { stage: 'awaiting_confirm', fromChatId: chatId, messageId: msgId },
+        });
+
+        const total = await User.countDocuments({});
+        await ctx.reply(
+          `👆 Это сообщение будет разослано.\n\n` +
+          `Получателей: ${total}\n\n` +
+          `Подтвердите отправку:`,
+          Markup.inlineKeyboard([
+            [Markup.button.callback(`✅ Отправить всем (${total})`, 'broadcast_confirm')],
+            [Markup.button.callback('❌ Отмена', 'broadcast_cancel')],
+          ])
+        );
+        return;
+      }
+
       // Обработка кнопки "Назад"
       if (messageText === 'Назад') {
         userStates.delete(userId);
@@ -517,6 +627,48 @@ const initializeBot = () => {
   bot.action('cancel_payment', async (ctx: Context) => {
     await ctx.editMessageText('❌ Оплата отменена.');
     await ctx.reply('Выберите действие:', getMainKeyboard());
+  });
+
+  bot.action('broadcast_cancel', async (ctx: Context) => {
+    const userId = ctx.from?.id;
+    if (!isAdmin(userId)) return;
+    userStates.delete(userId!);
+    await ctx.answerCbQuery('Отменено');
+    await ctx.editMessageText('❌ Рассылка отменена.');
+  });
+
+  bot.action('broadcast_confirm', async (ctx: Context) => {
+    const userId = ctx.from?.id;
+    if (!isAdmin(userId)) return;
+
+    const state = userStates.get(userId!);
+    const bc = state?.broadcast;
+    if (!bc || bc.stage !== 'awaiting_confirm' || bc.fromChatId == null || bc.messageId == null) {
+      await ctx.answerCbQuery('Нет сообщения для рассылки');
+      return;
+    }
+
+    userStates.delete(userId!);
+    await ctx.answerCbQuery('Запускаю рассылку…');
+    await ctx.editMessageText('📤 Рассылка запущена…');
+
+    try {
+      const result = await runBroadcast(bc.fromChatId, bc.messageId, async (done, total) => {
+        await ctx.telegram.sendMessage(userId!, `⏳ Прогресс: ${done}/${total}`).catch(() => {});
+      });
+      await ctx.telegram.sendMessage(
+        userId!,
+        `✅ Рассылка завершена.\n\n` +
+        `Всего: ${result.total}\n` +
+        `Доставлено: ${result.sent}\n` +
+        `Заблокировали бота: ${result.blocked}\n` +
+        `Ошибок: ${result.failed}`
+      );
+      logger.info('Broadcast finished', { adminId: userId, ...result });
+    } catch (error) {
+      logger.error('Broadcast failed', { error, adminId: userId });
+      await ctx.telegram.sendMessage(userId!, '❌ Рассылка прервана из-за ошибки. Подробности в логах.').catch(() => {});
+    }
   });
 
   // Обработка ошибок
