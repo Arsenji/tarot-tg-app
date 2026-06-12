@@ -28,6 +28,20 @@ function isAdminUser(userId: number): boolean {
   return !!(adminTelegramId && userId.toString() === adminTelegramId.toString());
 }
 
+/**
+ * Извлекает «Да»/«Нет» из ответа ИИ. Приоритет — по началу первой строки
+ * (промпт требует начинать с «Да»/«Нет»), чтобы слова вроде «сомнений нет»
+ * далее в строке не переворачивали ответ. Возвращает null, если не найдено.
+ */
+function parseYesNoFromText(text: string): 'Да' | 'Нет' | null {
+  const firstLine = (text || '').split('\n')[0].trim().toLowerCase();
+  if (firstLine.startsWith('нет')) return 'Нет';
+  if (firstLine.startsWith('да')) return 'Да';
+  if (firstLine.includes('нет')) return 'Нет';
+  if (firstLine.includes('да')) return 'Да';
+  return null;
+}
+
 async function buildWalletInfoForRequest(req: any): Promise<WalletSnapshot | null> {
   const userId = req.user?.telegramId;
   if (userId == null) return null;
@@ -489,13 +503,11 @@ router.post('/yes-no', async (req: any, res) => {
 
     // Извлекаем ответ "Да" или "Нет" из интерпретации
     const interpretationText = interpretation.interpretation;
-    const firstLine = interpretationText.split('\n')[0].trim();
     let answer: 'Да' | 'Нет' = 'Да';
-    
-    if (firstLine.toLowerCase().includes('нет') || firstLine.toLowerCase().startsWith('нет')) {
-      answer = 'Нет';
-    } else if (firstLine.toLowerCase().includes('да') || firstLine.toLowerCase().startsWith('да')) {
-      answer = 'Да';
+
+    const parsedAnswer = parseYesNoFromText(interpretationText);
+    if (parsedAnswer) {
+      answer = parsedAnswer;
     } else {
       // Если ответ не найден явно, определяем по карте
       const positiveCards = ['The Sun', 'The Star', 'The World', 'The Wheel of Fortune', 'The Lovers', 'The Chariot'];
@@ -1000,12 +1012,7 @@ const handleClarifyingQuestion = async (req: any, res: any) => {
     // Извлекаем ответ "Да" или "Нет" для yes/no расклада
     let yesNoAnswer: 'Да' | 'Нет' | null = null;
     if (readingType === 'yesno') {
-      const firstLine = answer.interpretation.split('\n')[0].trim();
-      if (firstLine.toLowerCase().includes('нет') || firstLine.toLowerCase().startsWith('нет')) {
-        yesNoAnswer = 'Нет';
-      } else if (firstLine.toLowerCase().includes('да') || firstLine.toLowerCase().startsWith('да')) {
-        yesNoAnswer = 'Да';
-      }
+      yesNoAnswer = parseYesNoFromText(answer.interpretation);
     }
 
     logger.info('Clarifying question - new card selected', {
