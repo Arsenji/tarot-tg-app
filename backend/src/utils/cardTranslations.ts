@@ -29,6 +29,31 @@ export function getRussianCardName(englishName: string): string {
   return cardNameTranslations[englishName] || englishName;
 }
 
+// Регэксп для замены английских названий: длинные имена первыми, чтобы
+// "The Emperor" не подменялся раньше "The Empress" и т.п.
+const englishCardNameRegex = new RegExp(
+  Object.keys(cardNameTranslations)
+    .sort((a, b) => b.length - a.length)
+    .map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .join('|'),
+  'gi'
+);
+
+/**
+ * Заменяет любые английские названия карт в тексте на русские.
+ * Страховка: модель иногда игнорирует инструкцию и пишет имена по-английски.
+ */
+export function localizeCardNames(text: string): string {
+  if (!text) return text;
+  return text.replace(englishCardNameRegex, (match) => {
+    // Нормализуем регистр ключа (ключи словаря — в исходном регистре).
+    const key = Object.keys(cardNameTranslations).find(
+      (k) => k.toLowerCase() === match.toLowerCase()
+    );
+    return key ? cardNameTranslations[key] : match;
+  });
+}
+
 // Получить путь к изображению карты
 export function getCardImagePath(cardName: string, isReversed: boolean = false): string {
   // Маппинг английских названий на имена файлов (соответствует реальным файлам в папке)

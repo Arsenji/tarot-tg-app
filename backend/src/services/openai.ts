@@ -2,6 +2,7 @@ import OpenAI from 'openai';
 import mongoose from 'mongoose';
 import logger from '../utils/logger';
 import { TarotReading } from '../models/TarotReading';
+import { getRussianCardName, localizeCardNames } from '../utils/cardTranslations';
 
 export interface OpenAIResponse {
   success: boolean;
@@ -156,7 +157,7 @@ class OpenAIService {
         return { success: false, error: 'Empty response from OpenAI' };
       }
 
-      return { success: true, interpretation };
+      return { success: true, interpretation: localizeCardNames(interpretation) };
     } catch (error) {
       this._gptAvailable = false;
       logger.error('OpenAI card interpretation error — marking GPT unavailable', { error, request });
@@ -198,7 +199,7 @@ class OpenAIService {
         return { success: false, error: 'Empty response from OpenAI' };
       }
 
-      return { success: true, interpretation };
+      return { success: true, interpretation: localizeCardNames(interpretation) };
     } catch (error) {
       this._gptAvailable = false;
       logger.error('OpenAI reading interpretation error — marking GPT unavailable', { error, request });
@@ -223,7 +224,7 @@ class OpenAIService {
       positionText = position;
     }
     
-    let prompt = `Ты опытный таролог. Дай интерпретацию карты "${cardName}"`;
+    let prompt = `Ты опытный таролог. Дай интерпретацию карты "${getRussianCardName(cardName)}"`;
     
     if (isReversed) {
       prompt += ' в перевернутом положении';
@@ -264,7 +265,7 @@ class OpenAIService {
       // Специальный промпт для да/нет расклада
       const card = cards[0];
       let prompt = `Ты опытный таролог. Ты получил вопрос: "${question}"\n\n`;
-      prompt += `Выпала карта: ${card.name}`;
+      prompt += `Выпала карта: ${getRussianCardName(card.name)}`;
       if (card.isReversed) {
         prompt += ' (перевернутая)';
       }
@@ -272,6 +273,7 @@ class OpenAIService {
       prompt += 'ВАЖНО: Твой ответ должен начинаться с четкого ответа "Да" или "Нет" в первой строке.\n';
       prompt += 'После этого дай краткую интерпретацию (2-3 предложения), объясняющую, почему карта указывает на этот ответ.\n';
       prompt += 'Интерпретация должна быть конкретной и связанной с вопросом пользователя.\n';
+      prompt += 'Используй ТОЛЬКО русский язык. Если упоминаешь карту, используй её русское название (например, "Звезда", "Башня", "Смерть"), никогда не пиши английские названия вроде "The Star".\n';
       prompt += 'Не упоминай другие карты или позиции - это расклад из одной карты для ответа да/нет.';
       
       return prompt;
@@ -315,7 +317,7 @@ class OpenAIService {
       prompt = `Интерпретируй расклад "${readingType}" с картами:\n`;
       
       cards.forEach((card, index) => {
-        prompt += `${index + 1}. ${card.name}`;
+        prompt += `${index + 1}. ${getRussianCardName(card.name)}`;
         if (card.isReversed) {
           prompt += ' (перевернутая)';
         }
@@ -350,7 +352,7 @@ class OpenAIService {
 
     try {
       let prompt = `Ты опытный таролог. Пользователь задал основной вопрос: "${originalQuestion}"\n\n`;
-      prompt += `На этот вопрос выпала карта "${originalCard.name}"`;
+      prompt += `На этот вопрос выпала карта "${getRussianCardName(originalCard.name)}"`;
       if (originalCard.isReversed) {
         prompt += ' (перевернутая)';
       }
@@ -402,7 +404,7 @@ class OpenAIService {
 
       return {
         success: true,
-        interpretation
+        interpretation: localizeCardNames(interpretation)
       };
     } catch (error) {
       this._gptAvailable = false;
