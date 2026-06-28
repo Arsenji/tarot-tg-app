@@ -4,7 +4,7 @@ import { User } from '../models/User';
 import { SupportMessage } from '../models/SupportMessage';
 import { Review } from '../models/Review';
 import { Payment } from '../models/Payment';
-import { buildWalletSnapshot, creditTokenPackage } from '../utils/tokens';
+import { buildWalletSnapshot, creditTokenPackage, creditTokens } from '../utils/tokens';
 import {
   TOKEN_PACKAGES,
   TokenPackageId,
@@ -302,6 +302,40 @@ const initializeBot = () => {
       );
     } catch (error) {
       logger.error('Error in /broadcast command', { error, userId: ctx.from?.id });
+    }
+  });
+
+  // Начисление токенов пользователю вручную (только администратор)
+  // Использование: /addtokens <telegram_id> <количество>
+  bot.command('addtokens', async (ctx: Context) => {
+    try {
+      const userId = ctx.from?.id;
+      if (!isAdmin(userId)) {
+        return; // Игнорируем команду для не-администраторов
+      }
+
+      const text = (ctx.message as any)?.text || '';
+      const parts = text.trim().split(/\s+/).slice(1);
+      const targetId = Number(parts[0]);
+      const amount = Number(parts[1]);
+
+      if (!Number.isInteger(targetId) || !Number.isInteger(amount) || amount <= 0) {
+        await ctx.reply('Использование: /addtokens <telegram_id> <количество>\nНапример: /addtokens 697065181 50');
+        return;
+      }
+
+      const newBalance = await creditTokens(targetId, amount);
+      if (newBalance === null) {
+        await ctx.reply(`❌ Пользователь ${targetId} не найден. Он должен сначала запустить бота (/start).`);
+        return;
+      }
+      await ctx.reply(
+        `✅ Начислено ${amount} токенов пользователю ${targetId}.\n` +
+        `Текущий баланс: ${newBalance}.`
+      );
+    } catch (error) {
+      logger.error('Error in /addtokens command', { error, userId: ctx.from?.id });
+      await ctx.reply('❌ Не удалось начислить токены. Проверьте, что пользователь существует (запускал бота).');
     }
   });
 
