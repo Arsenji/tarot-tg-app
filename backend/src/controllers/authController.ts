@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import { LoginRequest, AuthResponse } from '../types';
 import { User } from '../models/User';
 import logger from '../utils/logger';
+import { isUserBlocked } from '../constants/blockedUsers';
 
 export class AuthController {
   async login(req: Request, res: Response): Promise<void> {
@@ -106,6 +107,13 @@ export class AuthController {
 
       const telegramUser = JSON.parse(userJson);
       const userId = telegramUser.id;
+
+      // Блокировка пользователей: заблокированные не получают токен.
+      if (isUserBlocked(userId)) {
+        logger.warn('Blocked user attempted Telegram auth', { userId });
+        res.status(403).json({ error: 'Access denied' });
+        return;
+      }
 
       // Создаем или обновляем пользователя в БД
       try {

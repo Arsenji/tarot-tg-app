@@ -17,6 +17,7 @@ import {
 } from '../utils/paymentReconcile';
 import logger from '../utils/logger';
 import { YooKassaService } from '../services/yookassa';
+import { isUserBlocked } from '../constants/blockedUsers';
 
 // Интерфейс для состояний пользователя
 interface UserState {
@@ -155,6 +156,26 @@ const initializeBot = () => {
       message,
       type: ctx.updateType
     });
+    return next();
+  });
+
+  // Блокировка пользователей: заблокированные не могут пользоваться ботом.
+  bot.use(async (ctx, next) => {
+    const userId = ctx.from?.id;
+    if (isUserBlocked(userId)) {
+      logger.warn('Blocked user attempted to use the bot', { userId, username: ctx.from?.username });
+      try {
+        // Отвечаем на callback, чтобы не висела «крутилка», но действий не выполняем.
+        if (ctx.callbackQuery) {
+          await ctx.answerCbQuery('Доступ ограничен').catch(() => {});
+        } else if (ctx.chat) {
+          await ctx.reply('⛔ Доступ к боту ограничен.').catch(() => {});
+        }
+      } catch {
+        // Игнорируем ошибки отправки — главное не пропускать дальше.
+      }
+      return; // Не вызываем next(): обработка запроса прекращается.
+    }
     return next();
   });
 

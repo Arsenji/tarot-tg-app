@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { User } from '../models/User';
 import logger from '../utils/logger';
+import { isUserBlocked } from '../constants/blockedUsers';
 
 export interface AuthRequest extends Request {
   user?: {
@@ -66,6 +67,19 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
         tokenPrefix: token.substring(0, 10) + '...'
       });
       throw jwtError;
+    }
+
+    // Блокировка пользователей: заблокированные не имеют доступа к API/мини-приложению.
+    if (isUserBlocked(decoded?.telegramId)) {
+      logger.warn('Authentication failed: user is blocked', {
+        path: req.path,
+        method: req.method,
+        telegramId: decoded?.telegramId,
+      });
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied',
+      });
     }
     
     // Проверяем, существует ли пользователь
