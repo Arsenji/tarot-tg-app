@@ -53,7 +53,12 @@ class EnvValidator {
       OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
       YOOKASSA_SHOP_ID: process.env.YOOKASSA_SHOP_ID,
       YOOKASSA_SECRET_KEY: process.env.YOOKASSA_SECRET_KEY,
-      FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:3000',
+      FRONTEND_URL: (process.env.FRONTEND_URL || 'http://localhost:3000')
+        // Убираем невидимые символы (пробелы, табы, переносы, zero-width),
+        // которые часто попадают при копировании значения в панель хостинга
+        // и ломают строгий парсер new URL().
+        .replace(/[\u0000-\u0020\u00a0\u200b-\u200d\ufeff]/g, '')
+        .trim(),
       PORT: process.env.PORT || '3001',
       NODE_ENV: process.env.NODE_ENV || 'development',
       DISABLE_TELEGRAM_BOT: process.env.DISABLE_TELEGRAM_BOT,
@@ -154,7 +159,13 @@ class EnvValidator {
     try {
       new URL(this.config.FRONTEND_URL);
     } catch {
-      this.errors.push(`❌ FRONTEND_URL must be a valid URL`);
+      // Не роняем весь сервис из-за некорректного FRONTEND_URL —
+      // это не критичная для запуска переменная. Логируем предупреждение
+      // и откатываемся на безопасный дефолт, чтобы бот всё равно поднялся.
+      console.warn(
+        `⚠️ FRONTEND_URL is not a valid URL ("${this.config.FRONTEND_URL}"), falling back to http://localhost:3000`
+      );
+      this.config.FRONTEND_URL = 'http://localhost:3000';
     }
   }
 
