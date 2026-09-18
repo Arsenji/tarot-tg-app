@@ -2,7 +2,7 @@
   "name": "@tarot-tg-app/backend",
   "version": "1.0.0",
   "description": "Main backend for Tarot Telegram App with OpenAI proxy",
-  "main": "src/index.ts",
+  "main": "dist/index.js",
   "scripts": {
     "dev": "nodemon src/index.ts",
     "build": "tsc",
